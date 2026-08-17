@@ -1,11 +1,14 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:google_nav_bar/google_nav_bar.dart';
 
 import '../../app/providers.dart';
-import '../audio/dhwani_audio_handler.dart';
+import '../../app/theme/dhwani_theme.dart';
 import '../../data/models/radio_station.dart';
+import '../audio/dhwani_audio_handler.dart';
 
 class DhwaniShell extends ConsumerWidget {
   const DhwaniShell({
@@ -38,31 +41,87 @@ class DhwaniShell extends ConsumerWidget {
               children: [
                 if (snapshot?.station != null && location != '/radio')
                   MiniPlayer(snapshot: snapshot!),
-                NavigationBar(
-                  selectedIndex: selected < 0 ? 0 : selected,
-                  onDestinationSelected: (index) => context.go(_paths[index]),
-                  destinations: const [
-                    NavigationDestination(
-                      icon: Icon(Icons.radio_outlined),
-                      selectedIcon: Icon(Icons.radio),
-                      label: 'Radio',
+                Container(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface,
+                    boxShadow: [
+                      BoxShadow(
+                        blurRadius: 16,
+                        color: Colors.black.withValues(alpha: .12),
+                        offset: const Offset(0, -2),
+                      ),
+                    ],
+                    border: Border(
+                      top: BorderSide(
+                        color: Theme.of(context).dividerTheme.color ??
+                            Theme.of(context)
+                                .colorScheme
+                                .outline
+                                .withValues(alpha: .3),
+                        width: 1,
+                      ),
                     ),
-                    NavigationDestination(
-                      icon: Icon(Icons.explore_outlined),
-                      selectedIcon: Icon(Icons.explore),
-                      label: 'Discover',
+                  ),
+                  child: SafeArea(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      child: GNav(
+                        rippleColor: DhwaniColors.signal.withValues(alpha: .18),
+                        hoverColor: Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withValues(alpha: .06),
+                        gap: 8,
+                        activeColor: DhwaniColors.signal,
+                        iconSize: 22,
+                        textStyle: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: DhwaniColors.signal,
+                          letterSpacing: .3,
+                        ),
+                        tabBorderRadius: 18,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        duration: const Duration(milliseconds: 350),
+                        curve: Curves.easeInOutCubic,
+                        tabBackgroundColor:
+                            DhwaniColors.signal.withValues(alpha: .12),
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withValues(alpha: .55),
+                        selectedIndex: selected < 0 ? 0 : selected,
+                        onTabChange: (index) {
+                          HapticFeedback.selectionClick();
+                          context.go(_paths[index]);
+                        },
+                        tabs: const [
+                          GButton(
+                            icon: Icons.radio_outlined,
+                            text: 'Radio',
+                          ),
+                          GButton(
+                            icon: Icons.explore_outlined,
+                            text: 'Discover',
+                          ),
+                          GButton(
+                            icon: Icons.favorite_outline_rounded,
+                            text: 'Saved',
+                          ),
+                          GButton(
+                            icon: Icons.library_music_outlined,
+                            text: 'Recordings',
+                          ),
+                        ],
+                      ),
                     ),
-                    NavigationDestination(
-                      icon: Icon(Icons.favorite_outline),
-                      selectedIcon: Icon(Icons.favorite),
-                      label: 'Saved',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.library_music_outlined),
-                      selectedIcon: Icon(Icons.library_music),
-                      label: 'Recordings',
-                    ),
-                  ],
+                  ),
                 ),
               ],
             )

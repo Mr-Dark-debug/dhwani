@@ -33,7 +33,7 @@ class SavedScreen extends ConsumerWidget {
             const TabBar(
               tabs: [
                 Tab(text: 'Favourites'),
-                Tab(text: 'Recently played'),
+                Tab(text: 'Recents'),
                 Tab(text: 'Collections'),
                 Tab(text: 'Custom'),
               ],

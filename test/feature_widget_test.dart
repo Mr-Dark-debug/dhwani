@@ -1,17 +1,23 @@
 import 'package:dhwani/app/providers.dart';
+import 'package:dhwani/core/audio/dhwani_audio_handler.dart';
 import 'package:dhwani/core/persistence/app_database.dart';
 import 'package:dhwani/core/settings/settings_controller.dart';
+import 'package:dhwani/core/widgets/dhwani_shell.dart';
 import 'package:dhwani/data/datasources/akashvani_api.dart';
 import 'package:dhwani/data/datasources/radio_browser_api.dart';
 import 'package:dhwani/data/models/radio_station.dart';
 import 'package:dhwani/data/repositories/catalogue_repository.dart';
 import 'package:dhwani/features/location/location_screens.dart';
+import 'package:dhwani/features/player/player_screen.dart';
 import 'package:dhwani/features/search/search_screen.dart';
 import 'package:dhwani/features/settings/settings_screen.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:google_nav_bar/google_nav_bar.dart';
+import 'package:rxdart/rxdart.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -130,6 +136,186 @@ void main() {
     );
     expect(find.text('Default recording directory'), findsOneWidget);
   });
+
+  testWidgets(
+    'player screen exposes top more menu, band dropdown, and 2-row controls',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final preferences = await SharedPreferences.getInstance();
+      final database = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(database.close);
+      final repository = _FakeCatalogue(database);
+      const testStation = RadioStation(
+        id: 'air:darbhanga',
+        name: 'Akashvani Darbhanga',
+        country: 'India',
+        countryCode: 'IN',
+        state: 'Bihar',
+        city: 'Darbhanga',
+        band: RadioBand.am,
+        frequency: 1296,
+        frequencyUnit: 'kHz',
+        streams: [StationStream(url: 'https://example.test/live')],
+        directory: RadioDirectory.offlineSeed,
+      );
+
+      final router = GoRouter(
+        initialLocation: '/',
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (context, state) => const PlayerScreen(),
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            preferencesProvider.overrideWithValue(preferences),
+            sharedPreferencesForSettingsProvider.overrideWithValue(preferences),
+            databaseProvider.overrideWithValue(database),
+            catalogueRepositoryProvider.overrideWithValue(repository),
+            audioHandlerProvider.overrideWithValue(_FakeAudioHandler()),
+            stationsProvider.overrideWith((ref) => Stream.value([testStation])),
+            selectedStationProvider.overrideWith(
+              () => _TestSelectedStationController(testStation),
+            ),
+          ],
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Verify top bar items: more menu button (3 dots) and band selector
+      expect(find.byTooltip('More actions'), findsOneWidget);
+      expect(find.byTooltip('Filter by source / band'), findsOneWidget);
+      expect(find.byTooltip('Station information'), findsNothing);
+
+      // Verify Row 1 control items
+      expect(find.byTooltip('Previous station'), findsOneWidget);
+      expect(find.byTooltip('Save favourite'), findsOneWidget);
+      expect(find.byTooltip('Record live broadcast'), findsOneWidget);
+      expect(find.byTooltip('Next station'), findsOneWidget);
+
+      // Verify Row 2 main hero Play/Pause button
+      expect(find.byKey(const Key('player-play-pause')), findsOneWidget);
+
+      // Verify tapping band dropdown opens band options
+      await tester.tap(find.byTooltip('Filter by source / band'));
+      await tester.pumpAndSettle();
+      expect(find.text('All Bands'), findsOneWidget);
+      expect(find.text('AM Radio'), findsOneWidget);
+      expect(find.text('FM Radio'), findsOneWidget);
+      expect(find.text('Internet (NET)'), findsOneWidget);
+      await tester.tap(find.text('FM Radio'));
+      await tester.pumpAndSettle();
+
+      // Verify tapping top right 3-dots more menu opens sheet with Station info
+      await tester.tap(find.byTooltip('More actions'));
+      await tester.pumpAndSettle();
+      expect(find.text('Station info'), findsOneWidget);
+      expect(find.text('Sleep timer'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'shell renders google nav bar tabs and navigates between sections',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final preferences = await SharedPreferences.getInstance();
+      final database = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(database.close);
+      final repository = _FakeCatalogue(database);
+
+      final router = GoRouter(
+        initialLocation: '/radio',
+        routes: [
+          GoRoute(
+            path: '/radio',
+            builder: (context, state) =>
+                const DhwaniShell(child: Text('Radio Body')),
+          ),
+          GoRoute(
+            path: '/discover',
+            builder: (context, state) =>
+                const DhwaniShell(child: Text('Discover Body')),
+          ),
+          GoRoute(
+            path: '/saved',
+            builder: (context, state) =>
+                const DhwaniShell(child: Text('Saved Body')),
+          ),
+          GoRoute(
+            path: '/recordings',
+            builder: (context, state) =>
+                const DhwaniShell(child: Text('Recordings Body')),
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            preferencesProvider.overrideWithValue(preferences),
+            sharedPreferencesForSettingsProvider.overrideWithValue(preferences),
+            databaseProvider.overrideWithValue(database),
+            catalogueRepositoryProvider.overrideWithValue(repository),
+            audioHandlerProvider.overrideWithValue(_FakeAudioHandler()),
+          ],
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.widgetWithText(GButton, 'Radio'), findsOneWidget);
+      expect(find.widgetWithText(GButton, 'Discover'), findsOneWidget);
+      expect(find.widgetWithText(GButton, 'Saved'), findsOneWidget);
+      expect(find.widgetWithText(GButton, 'Recordings'), findsOneWidget);
+      expect(find.text('Radio Body'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(GButton, 'Discover'));
+      await tester.pumpAndSettle();
+      expect(find.text('Discover Body'), findsOneWidget);
+    },
+  );
+}
+
+class _FakeAudioHandler extends Fake implements DhwaniAudioHandler {
+  @override
+  bool get equalizerSupported => false;
+
+  @override
+  final BehaviorSubject<DhwaniPlayerSnapshot> snapshot = BehaviorSubject.seeded(
+    const DhwaniPlayerSnapshot(status: DhwaniPlaybackStatus.ready),
+  );
+
+  @override
+  RadioStation? get currentStation => null;
+
+  @override
+  Future<void> setQueueStations(
+    List<RadioStation> stations, {
+    RadioStation? selected,
+  }) async {}
+
+  @override
+  Future<void> selectStation(
+    RadioStation station, {
+    bool autoplay = false,
+  }) async {}
+
+  @override
+  Future<void> skipToNext() async {}
+
+  @override
+  Future<void> skipToPrevious() async {}
+
+  @override
+  Future<void> pause() async {}
+
+  @override
+  Future<void> play() async {}
 }
 
 class _FakeCatalogue extends CatalogueRepository {
@@ -173,3 +359,11 @@ RadioStation _station(String id, String name) => RadioStation(
   streams: const [StationStream(url: 'https://example.test/live')],
   directory: RadioDirectory.radioBrowser,
 );
+
+class _TestSelectedStationController extends SelectedStationController {
+  _TestSelectedStationController(this.initialStation);
+  final RadioStation initialStation;
+
+  @override
+  RadioStation? build() => initialStation;
+}

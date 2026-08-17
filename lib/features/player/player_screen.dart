@@ -174,9 +174,9 @@ class _PlayerContent extends ConsumerWidget {
             const Spacer(),
             _BandMenu(station: station),
             IconButton(
-              tooltip: 'Station information',
-              onPressed: () => showStationInfo(context, ref, station, snapshot),
-              icon: const Icon(Icons.info_outline_rounded),
+              tooltip: 'More actions',
+              onPressed: () => _showMore(context, ref),
+              icon: const Icon(Icons.more_horiz_rounded),
             ),
           ],
         ),
@@ -286,6 +286,7 @@ class _PlayerContent extends ConsumerWidget {
               child: _TransportButton(
                 tooltip: 'Previous station',
                 icon: Icons.skip_previous_rounded,
+                height: compact ? 64 : 78,
                 onPressed: () async {
                   await ref.read(audioHandlerProvider).skipToPrevious();
                   final current = ref.read(audioHandlerProvider).currentStation;
@@ -297,43 +298,18 @@ class _PlayerContent extends ConsumerWidget {
             ),
             const SizedBox(width: 10),
             Expanded(
-              flex: 3,
-              child: FilledButton.icon(
-                key: const Key('player-play-pause'),
-                onPressed: busy
-                    ? null
-                    : () => playing
-                          ? ref.read(audioHandlerProvider).pause()
-                          : playWithMediaNotification(ref),
-                style: FilledButton.styleFrom(
-                  minimumSize: Size.fromHeight(compact ? 62 : 74),
-                  backgroundColor: playing
-                      ? Theme.of(context).colorScheme.onSurface
-                      : DhwaniColors.signal,
-                  foregroundColor: Theme.of(context).scaffoldBackgroundColor,
-                ),
-                icon: busy
-                    ? const SizedBox.square(
-                        dimension: 19,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : Icon(
-                        playing
-                            ? Icons.pause_rounded
-                            : Icons.play_arrow_rounded,
-                      ),
-                label: Text(
-                  busy
-                      ? _statusLabel(snapshot.status)
-                      : playing
-                      ? 'Pause'
-                      : snapshot.status == DhwaniPlaybackStatus.error
-                      ? 'Retry'
-                      : 'Play live',
-                ),
+              child: _FavouriteButton(
+                station: station,
+                height: compact ? 64 : 78,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _RecordButton(
+                station: station,
+                snapshot: snapshot,
+                recording: recording,
+                height: compact ? 64 : 78,
               ),
             ),
             const SizedBox(width: 10),
@@ -341,6 +317,7 @@ class _PlayerContent extends ConsumerWidget {
               child: _TransportButton(
                 tooltip: 'Next station',
                 icon: Icons.skip_next_rounded,
+                height: compact ? 64 : 78,
                 onPressed: () async {
                   await ref.read(audioHandlerProvider).skipToNext();
                   final current = ref.read(audioHandlerProvider).currentStation;
@@ -352,31 +329,97 @@ class _PlayerContent extends ConsumerWidget {
             ),
           ],
         ),
-        SizedBox(height: compact ? 4 : 14),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            _FavouriteButton(station: station),
-            _RecordButton(
-              station: station,
-              snapshot: snapshot,
-              recording: recording,
+        if (recording.status == RecordingStatus.recording) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            decoration: BoxDecoration(
+              color: DhwaniColors.signal.withValues(alpha: .12),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: DhwaniColors.signal.withValues(alpha: .3),
+                width: 1,
+              ),
             ),
-            IconButton(
-              tooltip: 'More actions',
-              onPressed: () => _showMore(context, ref),
-              icon: const Icon(Icons.more_horiz_rounded),
-            ),
-          ],
-        ),
-        if (recording.status == RecordingStatus.recording)
-          Text(
-            '● REC  ${_duration(recording.elapsed)}',
-            style: const TextStyle(
-              color: DhwaniColors.signal,
-              fontWeight: FontWeight.w800,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: DhwaniColors.signal,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'REC  ${_duration(recording.elapsed)}',
+                  style: const TextStyle(
+                    color: DhwaniColors.signal,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13,
+                    letterSpacing: .5,
+                  ),
+                ),
+              ],
             ),
           ),
+        ],
+        SizedBox(height: compact ? 10 : 16),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            key: const Key('player-play-pause'),
+            onPressed: busy
+                ? null
+                : () => playing
+                      ? ref.read(audioHandlerProvider).pause()
+                      : playWithMediaNotification(ref),
+            style: FilledButton.styleFrom(
+              minimumSize: Size.fromHeight(compact ? 66 : 80),
+              backgroundColor: playing
+                  ? Theme.of(context).colorScheme.onSurface
+                  : DhwaniColors.signal,
+              foregroundColor: playing
+                  ? Theme.of(context).scaffoldBackgroundColor
+                  : Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(22),
+              ),
+              elevation: playing ? 0 : 3,
+              shadowColor: DhwaniColors.signal.withValues(alpha: .35),
+            ),
+            icon: busy
+                ? const SizedBox.square(
+                    dimension: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.2,
+                      color: Colors.white,
+                    ),
+                  )
+                : Icon(
+                    playing
+                        ? Icons.pause_rounded
+                        : Icons.play_arrow_rounded,
+                    size: 28,
+                  ),
+            label: Text(
+              busy
+                  ? _statusLabel(snapshot.status)
+                  : playing
+                  ? 'Pause'
+                  : snapshot.status == DhwaniPlaybackStatus.error
+                  ? 'Retry'
+                  : 'Play live',
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                letterSpacing: .4,
+              ),
+            ),
+          ),
+        ),
         if (snapshot.status == DhwaniPlaybackStatus.error) ...[
           const SizedBox(height: 12),
           Text(
@@ -398,10 +441,12 @@ class _PlayerContent extends ConsumerWidget {
   ) => showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
+    isScrollControlled: true,
     builder: (context) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
           ListTile(
             leading: const Icon(Icons.timer_outlined),
             title: const Text('Sleep timer'),
@@ -510,39 +555,141 @@ class _PlayerContent extends ConsumerWidget {
         ],
       ),
     ),
-  );
+  ),
+);
 }
 
 class _BandMenu extends ConsumerWidget {
   const _BandMenu({required this.station});
   final RadioStation station;
 
+  IconData _bandIcon(RadioBand? band) => switch (band) {
+    RadioBand.fm => Icons.radio_rounded,
+    RadioBand.am => Icons.sensors_rounded,
+    RadioBand.net => Icons.wifi_rounded,
+    null => Icons.tune_rounded,
+  };
+
+  String _bandLabel(RadioBand? band) => switch (band) {
+    RadioBand.fm => 'FM Radio',
+    RadioBand.am => 'AM Radio',
+    RadioBand.net => 'Internet (NET)',
+    null => 'All Bands',
+  };
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final selected = ref.watch(bandFilterProvider);
+    final displayLabel = selected?.name.toUpperCase() ?? station.bandLabel;
+    final currentIcon = _bandIcon(selected ?? station.band);
+
     return PopupMenuButton<RadioBand?>(
-      tooltip: 'Band filter',
+      tooltip: 'Filter by source / band',
       initialValue: selected,
-      onSelected: (value) => ref.read(bandFilterProvider.notifier).set(value),
-      itemBuilder: (_) => const [
-        PopupMenuItem(value: null, child: Text('All')),
-        PopupMenuItem(value: RadioBand.am, child: Text('AM')),
-        PopupMenuItem(value: RadioBand.fm, child: Text('FM')),
-        PopupMenuItem(value: RadioBand.net, child: Text('NET')),
+      onSelected: (value) {
+        HapticFeedback.selectionClick();
+        ref.read(bandFilterProvider.notifier).set(value);
+      },
+      elevation: 6,
+      shadowColor: Colors.black.withValues(alpha: .35),
+      color:
+          Theme.of(context).cardTheme.color ??
+          Theme.of(context).colorScheme.surface,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(
+          color: Theme.of(context).colorScheme.outline.withValues(alpha: .4),
+        ),
+      ),
+      position: PopupMenuPosition.under,
+      offset: const Offset(0, 8),
+      itemBuilder: (context) => [
+        _buildMenuItem(context, null, selected == null),
+        _buildMenuItem(context, RadioBand.fm, selected == RadioBand.fm),
+        _buildMenuItem(context, RadioBand.am, selected == RadioBand.am),
+        _buildMenuItem(context, RadioBand.net, selected == RadioBand.net),
       ],
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.onSurface,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Text(
-          selected?.name.toUpperCase() ?? station.bandLabel,
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.surface,
-            fontWeight: FontWeight.w800,
+          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .08),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color:
+                Theme.of(context).colorScheme.onSurface.withValues(alpha: .08),
           ),
         ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              currentIcon,
+              size: 16,
+              color: selected != null
+                  ? DhwaniColors.signal
+                  : Theme.of(context).colorScheme.onSurface,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              displayLabel,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface,
+                fontWeight: FontWeight.w800,
+                fontSize: 13,
+                letterSpacing: .4,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(
+              Icons.keyboard_arrow_down_rounded,
+              size: 18,
+              color:
+                  Theme.of(context).colorScheme.onSurface.withValues(alpha: .6),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  PopupMenuItem<RadioBand?> _buildMenuItem(
+    BuildContext context,
+    RadioBand? band,
+    bool isSelected,
+  ) {
+    return PopupMenuItem<RadioBand?>(
+      value: band,
+      height: 46,
+      child: Row(
+        children: [
+          Icon(
+            _bandIcon(band),
+            size: 20,
+            color: isSelected
+                ? DhwaniColors.signal
+                : Theme.of(context).colorScheme.onSurface.withValues(alpha: .7),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              _bandLabel(band),
+              style: TextStyle(
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
+                fontSize: 14,
+                color: isSelected
+                    ? DhwaniColors.signal
+                    : Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+          ),
+          if (isSelected)
+            const Icon(
+              Icons.check_rounded,
+              size: 18,
+              color: DhwaniColors.signal,
+            ),
+        ],
       ),
     );
   }
@@ -590,10 +737,12 @@ class _TransportButton extends StatelessWidget {
     required this.tooltip,
     required this.icon,
     required this.onPressed,
+    this.height = 78,
   });
   final String tooltip;
   final IconData icon;
   final VoidCallback onPressed;
+  final double height;
 
   @override
   Widget build(BuildContext context) => Tooltip(
@@ -604,15 +753,19 @@ class _TransportButton extends StatelessWidget {
       child: InkWell(
         onTap: onPressed,
         borderRadius: BorderRadius.circular(20),
-        child: SizedBox(height: 74, child: Icon(icon)),
+        child: SizedBox(
+          height: height,
+          child: Center(child: Icon(icon, size: 26)),
+        ),
       ),
     ),
   );
 }
 
 class _FavouriteButton extends ConsumerStatefulWidget {
-  const _FavouriteButton({required this.station});
+  const _FavouriteButton({required this.station, this.height = 78});
   final RadioStation station;
+  final double height;
 
   @override
   ConsumerState<_FavouriteButton> createState() => _FavouriteButtonState();
@@ -624,70 +777,255 @@ class _FavouriteButtonState extends ConsumerState<_FavouriteButton> {
   @override
   void initState() {
     super.initState();
+    _loadStatus();
+  }
+
+  @override
+  void didUpdateWidget(covariant _FavouriteButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.station.id != widget.station.id) {
+      _loadStatus();
+    }
+  }
+
+  void _loadStatus() {
     ref.read(databaseProvider).isFavourite(widget.station.id).then((result) {
       if (mounted) setState(() => value = result);
     });
   }
 
   @override
-  Widget build(BuildContext context) => IconButton(
-    tooltip: value ? 'Remove favourite' : 'Save favourite',
-    onPressed: () async {
-      final next = !value;
-      await ref
-          .read(catalogueRepositoryProvider)
-          .favourite(widget.station, next);
-      HapticFeedback.lightImpact();
-      if (mounted) setState(() => value = next);
-    },
-    icon: Icon(
-      value ? Icons.favorite_rounded : Icons.favorite_outline_rounded,
-      color: value ? DhwaniColors.signal : null,
+  Widget build(BuildContext context) => Tooltip(
+    message: value ? 'Remove favourite' : 'Save favourite',
+    child: Material(
+      color: value
+          ? DhwaniColors.signal.withValues(alpha: .12)
+          : Theme.of(context).colorScheme.onSurface.withValues(alpha: .08),
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        onTap: () async {
+          final next = !value;
+          await ref
+              .read(catalogueRepositoryProvider)
+              .favourite(widget.station, next);
+          HapticFeedback.lightImpact();
+          if (mounted) setState(() => value = next);
+        },
+        borderRadius: BorderRadius.circular(20),
+        child: SizedBox(
+          height: widget.height,
+          child: Center(
+            child: Icon(
+              value ? Icons.favorite_rounded : Icons.favorite_outline_rounded,
+              color: value ? DhwaniColors.signal : null,
+              size: 26,
+            ),
+          ),
+        ),
+      ),
     ),
   );
 }
 
-class _RecordButton extends ConsumerWidget {
+class _RecordButton extends ConsumerStatefulWidget {
   const _RecordButton({
     required this.station,
     required this.snapshot,
     required this.recording,
+    this.height = 78,
   });
   final RadioStation station;
   final DhwaniPlayerSnapshot snapshot;
   final RecordingSnapshot recording;
+  final double height;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final active =
-        recording.status == RecordingStatus.recording ||
-        recording.status == RecordingStatus.stopping;
-    return IconButton(
-      tooltip: active ? 'Stop recording' : 'Record live stream',
-      onPressed: () async {
-        try {
-          if (active) {
-            await ref.read(recordingServiceProvider).stop();
-            HapticFeedback.mediumImpact();
-          } else {
-            final stream = snapshot.stream ?? station.rankedStreams.firstOrNull;
-            if (stream == null) throw StateError('No stream mapped');
-            await ref.read(recordingServiceProvider).start(station, stream);
-            HapticFeedback.mediumImpact();
-          }
-        } catch (error) {
-          if (context.mounted) {
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(SnackBar(content: Text('$error')));
-          }
-        }
-      },
-      icon: Icon(
-        active
-            ? Icons.stop_circle_outlined
-            : Icons.fiber_manual_record_outlined,
-        color: active ? DhwaniColors.signal : null,
+  ConsumerState<_RecordButton> createState() => _RecordButtonState();
+}
+
+class _RecordButtonState extends ConsumerState<_RecordButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulseController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1200),
+  );
+  late final Animation<double> _pulseAnimation = CurvedAnimation(
+    parent: _pulseController,
+    curve: Curves.easeInOut,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.recording.status == RecordingStatus.recording) {
+      _pulseController.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _RecordButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.recording.status == RecordingStatus.recording) {
+      if (!_pulseController.isAnimating) {
+        _pulseController.repeat(reverse: true);
+      }
+    } else {
+      if (_pulseController.isAnimating) {
+        _pulseController.stop();
+        _pulseController.value = 0.0;
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final status = widget.recording.status;
+    final isRecording = status == RecordingStatus.recording;
+    final isBusy =
+        status == RecordingStatus.starting ||
+        status == RecordingStatus.stopping;
+    final active = isRecording || isBusy;
+
+    return Tooltip(
+      message: active
+          ? (isBusy ? 'Processing recording…' : 'Stop recording')
+          : 'Record live broadcast',
+      child: AnimatedBuilder(
+        animation: _pulseAnimation,
+        builder: (context, child) {
+          final pulseVal = isRecording ? _pulseAnimation.value : 0.0;
+          return Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: isRecording
+                  ? [
+                      BoxShadow(
+                        color: DhwaniColors.signal.withValues(
+                          alpha: 0.25 + 0.25 * pulseVal,
+                        ),
+                        blurRadius: 10 + 6 * pulseVal,
+                        spreadRadius: 1 + 2 * pulseVal,
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Material(
+              color: isRecording
+                  ? DhwaniColors.signal.withValues(
+                      alpha: 0.14 + 0.10 * pulseVal,
+                    )
+                  : Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: .08),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+                side: isRecording
+                    ? BorderSide(
+                        color: DhwaniColors.signal.withValues(
+                          alpha: 0.4 + 0.4 * pulseVal,
+                        ),
+                        width: 1.5,
+                      )
+                    : BorderSide(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: .04),
+                        width: 1,
+                      ),
+              ),
+              child: InkWell(
+                onTap: isBusy
+                    ? null
+                    : () async {
+                        try {
+                          if (isRecording) {
+                            HapticFeedback.heavyImpact();
+                            await ref.read(recordingServiceProvider).stop();
+                          } else {
+                            final stream =
+                                widget.snapshot.stream ??
+                                widget.station.rankedStreams.firstOrNull;
+                            if (stream == null) {
+                              throw StateError('No stream mapped');
+                            }
+                            HapticFeedback.mediumImpact();
+                            await ref
+                                .read(recordingServiceProvider)
+                                .start(widget.station, stream);
+                          }
+                        } catch (error) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('$error')),
+                            );
+                          }
+                        }
+                      },
+                borderRadius: BorderRadius.circular(20),
+                child: SizedBox(
+                  height: widget.height,
+                  child: Center(
+                    child: isBusy
+                        ? const SizedBox.square(
+                            dimension: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.2,
+                              color: DhwaniColors.signal,
+                            ),
+                          )
+                        : isRecording
+                        ? Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              Container(
+                                width: 32,
+                                height: 32,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: DhwaniColors.signal.withValues(
+                                    alpha: 0.15 + 0.15 * pulseVal,
+                                  ),
+                                ),
+                              ),
+                              const Icon(
+                                Icons.stop_rounded,
+                                color: DhwaniColors.signal,
+                                size: 26,
+                              ),
+                            ],
+                          )
+                        : Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              Icon(
+                                Icons.circle_outlined,
+                                size: 26,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withValues(alpha: .65),
+                              ),
+                              Container(
+                                width: 12,
+                                height: 12,
+                                decoration: const BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: DhwaniColors.signal,
+                                ),
+                              ),
+                            ],
+                          ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

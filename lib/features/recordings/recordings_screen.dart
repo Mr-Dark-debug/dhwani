@@ -37,9 +37,6 @@ class RecordingsScreen extends ConsumerWidget {
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: 8),
-                    const Text(
-                      'Open a live station and tap Record. Network audio—not your microphone—will be saved.',
-                    ),
                   ],
                 ),
               ),
