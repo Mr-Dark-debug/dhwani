@@ -30,10 +30,16 @@ Future<void> main() async {
   final database = AppDatabase();
   final preferences = await SharedPreferences.getInstance();
   final audioHandler = await AudioService.init(
-    builder: DhwaniAudioHandler.new,
+    builder: () => DhwaniAudioHandler(
+      onSessionEnded: (station, duration) =>
+          database.addHistory(station, duration: duration),
+      onStreamResult: (station, stream, success) =>
+          database.recordStreamResult(station, stream.url, success: success),
+    ),
     config: const AudioServiceConfig(
       androidNotificationChannelId: 'com.prashant.dhwani.playback',
       androidNotificationChannelName: 'Live radio playback',
+      androidNotificationIcon: 'drawable/ic_stat_dhwani',
       androidNotificationOngoing: false,
       androidStopForegroundOnPause: true,
       notificationColor: Color(0xFFE33B32),
@@ -45,7 +51,28 @@ Future<void> main() async {
     akashvani: AkashvaniApi(),
   );
   final recorder = RecordingService(database: database);
-  final notifications = NotificationService();
+  final notifications = NotificationService(
+    onAction: (payload) {
+      unawaited(() async {
+        final separator = payload.indexOf(':');
+        if (separator < 0) return;
+        final details = payload.substring(separator + 1).split('|');
+        final stationId = details.first;
+        final station = (await database.allStations())
+            .where((item) => item.id == stationId)
+            .firstOrNull;
+        if (station == null) return;
+        await preferences.setString('lastStation', station.encode());
+        await preferences.setBool('onboardingComplete', true);
+        await audioHandler.setQueueStations([station], selected: station);
+        await audioHandler.selectStation(station);
+        if (payload.startsWith('alarm:') && details.length > 1) {
+          final volume = double.tryParse(details[1]);
+          if (volume != null) await audioHandler.setVolume(volume);
+        }
+      }());
+    },
+  );
   unawaited(notifications.initialize());
 
   runApp(

@@ -30,6 +30,15 @@ final notificationServiceProvider = Provider<NotificationService>(
   (ref) => throw UnimplementedError(),
 );
 
+/// Requests Android's notification permission immediately before the first
+/// user-initiated playback. Playback still proceeds when the user declines,
+/// but Android will then keep the foreground service out of the notification
+/// drawer and media controls will be less discoverable.
+Future<void> playWithMediaNotification(WidgetRef ref) async {
+  await ref.read(notificationServiceProvider).requestPermission();
+  await ref.read(audioHandlerProvider).play();
+}
+
 final bootstrapProvider = FutureProvider<void>((ref) async {
   await ref.read(catalogueRepositoryProvider).bootstrap();
 });
@@ -44,6 +53,12 @@ final customStationsProvider = StreamProvider<List<RadioStation>>(
 );
 final historyProvider = StreamProvider<List<RadioStation>>(
   (ref) => ref.read(catalogueRepositoryProvider).watchHistory(),
+);
+final historySummariesProvider = StreamProvider<List<HistorySummary>>(
+  (ref) => ref.read(databaseProvider).watchHistorySummaries(),
+);
+final collectionsProvider = StreamProvider<List<StationCollectionSummary>>(
+  (ref) => ref.read(databaseProvider).watchCollections(),
 );
 final recordingsProvider = StreamProvider(
   (ref) => ref.read(databaseProvider).watchRecordings(),
@@ -87,33 +102,75 @@ class SleepTimerState {
 }
 
 class SleepTimerController extends Notifier<SleepTimerState> {
+  static const _preferenceKey = 'sleepTimerEndAt';
   Timer? _timer;
+  double? _originalVolume;
 
   @override
   SleepTimerState build() {
     ref.onDispose(() => _timer?.cancel());
+    final encoded = ref.read(preferencesProvider).getString(_preferenceKey);
+    final endAt = DateTime.tryParse(encoded ?? '');
+    if (endAt != null && endAt.isAfter(DateTime.now())) {
+      final remaining = endAt.difference(DateTime.now());
+      Future.microtask(() => _schedule(endAt));
+      return SleepTimerState(endAt: endAt, remaining: remaining);
+    }
+    if (encoded != null) {
+      Future.microtask(
+        () => ref.read(preferencesProvider).remove(_preferenceKey),
+      );
+    }
     return const SleepTimerState();
   }
 
   void start(Duration duration) {
-    _timer?.cancel();
     final endAt = DateTime.now().add(duration);
-    state = SleepTimerState(endAt: endAt, remaining: duration);
+    ref
+        .read(preferencesProvider)
+        .setString(_preferenceKey, endAt.toIso8601String());
+    _schedule(endAt);
+  }
+
+  void _schedule(DateTime endAt) {
+    _timer?.cancel();
+    _originalVolume ??= ref.read(audioHandlerProvider).volume;
+    state = SleepTimerState(
+      endAt: endAt,
+      remaining: endAt.difference(DateTime.now()),
+    );
     _timer = Timer.periodic(const Duration(seconds: 1), (_) async {
       final remaining = endAt.difference(DateTime.now());
       if (remaining <= Duration.zero) {
         _timer?.cancel();
         state = const SleepTimerState();
         await ref.read(audioHandlerProvider).stop();
+        await _restoreVolume();
+        await ref.read(preferencesProvider).remove(_preferenceKey);
       } else {
+        if (remaining <= const Duration(seconds: 15) &&
+            _originalVolume != null) {
+          final fade = remaining.inMilliseconds / 15000;
+          await ref
+              .read(audioHandlerProvider)
+              .setVolume((_originalVolume! * fade).clamp(0, 1));
+        }
         state = SleepTimerState(endAt: endAt, remaining: remaining);
       }
     });
   }
 
-  void cancel() {
+  Future<void> cancel() async {
     _timer?.cancel();
     state = const SleepTimerState();
+    await _restoreVolume();
+    await ref.read(preferencesProvider).remove(_preferenceKey);
+  }
+
+  Future<void> _restoreVolume() async {
+    final volume = _originalVolume;
+    _originalVolume = null;
+    if (volume != null) await ref.read(audioHandlerProvider).setVolume(volume);
   }
 }
 
@@ -126,6 +183,7 @@ List<RadioStation> tuningQueue(
   List<RadioStation> stations, {
   required RadioStation current,
   RadioBand? band,
+  String preferredScope = 'city',
 }) {
   Iterable<RadioStation> filter(String? city, String? state, String? country) =>
       stations.where((station) {
@@ -135,7 +193,12 @@ List<RadioStation> tuningQueue(
         if (country != null && station.countryCode != country) return false;
         return station.canPlay;
       });
-  var queue = filter(current.city, current.state, current.countryCode).toList();
+  var queue = switch (preferredScope) {
+    'worldwide' => filter(null, null, null).toList(),
+    'country' => filter(null, null, current.countryCode).toList(),
+    'state' => filter(null, current.state, current.countryCode).toList(),
+    _ => filter(current.city, current.state, current.countryCode).toList(),
+  };
   if (queue.length < 2) {
     queue = filter(null, current.state, current.countryCode).toList();
   }

@@ -453,3 +453,209 @@ It preserves design quality and accessibility without orientation lock.
 
 ### Revisit if
 Tablet or foldable testing identifies additional breakpoints.
+
+## DEC-0016 — Evolve the local store for listening data and collections
+
+Date: 2026-08-17
+Status: Accepted
+
+### Question
+How should Dhwani persist favourite order, listening duration, stream health, and optional collections?
+
+### Options considered
+- Add more preference JSON blobs
+- Replace Drift
+- Migrate the existing Drift schema in place
+
+### Research / evidence
+- The existing structured store already owns stations, favourites, history, recordings, and reports.
+- Drift supports versioned migrations and typed joins without discarding user data.
+
+### Decision
+Migrate schema version 1 to 2, add collection/member tables, and extend repository methods for favourite order, history metrics, and source outcomes.
+
+### Why
+Relational constraints and typed queries keep user data durable and backup-friendly without a second persistence system.
+
+### Trade-offs
+- Schema migrations now require explicit compatibility tests.
+
+### Revisit if
+Catalogue size or synchronization requirements outgrow on-device SQLite.
+
+## DEC-0017 — Search cached data before remote data
+
+Date: 2026-08-17
+Status: Accepted
+
+### Question
+How should global search stay responsive and useful offline?
+
+### Options considered
+- Remote-only search
+- Cache-only search
+- Immediate cached results followed by a debounced remote merge
+
+### Research / evidence
+- Compact-device integration exposed unnecessary waiting and keyboard races in the remote-only flow.
+- Cached Akashvani metadata answers semantic searches such as Maithili and 1296 without a network round trip.
+
+### Decision
+Render local ranked results immediately, debounce remote work, merge by station identity, and ignore stale request completions.
+
+### Why
+This produces fast offline behavior without giving up worldwide discovery.
+
+### Trade-offs
+- Results can expand after the initial render.
+
+### Revisit if
+The catalogue becomes large enough to justify SQLite full-text search.
+
+## DEC-0018 — Persist and enforce behavioral settings
+
+Date: 2026-08-17
+Status: Accepted
+
+### Question
+Should settings be descriptive switches or active playback policies?
+
+### Options considered
+- Store UI state only
+- Apply policies only after restart
+- Apply and persist each policy through the owning service
+
+### Research / evidence
+- Wi-Fi-only, auto-reconnect, background playback, default scope, recording format, and autoplay all affect runtime behavior.
+
+### Decision
+Keep tiny preferences in `SharedPreferences`, push network policy into the audio handler, pause on background when disabled, restore sleep deadlines, and apply queue scope and recording format at the operation boundary.
+
+### Why
+A setting that does not change behavior is a broken feature.
+
+### Trade-offs
+- Lifecycle and network transitions require additional integration coverage.
+
+### Revisit if
+Settings need multi-device synchronization.
+
+## DEC-0019 — Use device IANA time zones for repeated reminders
+
+Date: 2026-08-17
+Status: Accepted
+
+### Question
+How should weekday alarm and recording reminders survive daylight-saving changes?
+
+### Options considered
+- Schedule in UTC
+- Infer a time zone from the numeric offset
+- Read the platform IANA zone and use timezone-aware schedules
+
+### Research / evidence
+- `flutter_timezone` 5.1.0 is a current Apache-2.0 package that reports the platform time-zone identifier.
+- `flutter_local_notifications` supports `dayOfWeekAndTime` matching with timezone locations.
+
+### Decision
+Initialize timezone data from the device IANA identifier and schedule one notification per selected weekday with inexact-while-idle delivery.
+
+### Why
+Wall-clock reminders remain stable across daylight-saving transitions without requesting exact-alarm privilege.
+
+### Trade-offs
+- OEM battery policy can still delay inexact delivery.
+
+### Revisit if
+A proven policy-compliant unattended recording service requires exact alarms.
+
+## DEC-0020 — Offer Android equalization only where the audio session supports it
+
+Date: 2026-08-17
+Status: Accepted
+
+### Question
+Can Dhwani expose useful sound presets without destabilizing cross-platform playback?
+
+### Options considered
+- Hide equalization everywhere
+- Add a third-party system-wide equalizer plug-in
+- Use just_audio's session-scoped Android equalizer and hide it elsewhere
+
+### Research / evidence
+- just_audio 0.10.6 exposes `AndroidEqualizer` in its audio pipeline.
+- Android's official `AudioEffect` API applies effects to a specific audio session.
+
+### Decision
+Provide Flat, Voice, Bass, Treble, and persistent custom band gains on Android only.
+
+### Why
+It uses the maintained playback dependency and avoids a dead control on unsupported platforms.
+
+### Trade-offs
+- Availability depends on the device audio-effect implementation.
+
+### Revisit if
+just_audio changes the API or other platforms gain an equivalent stable path.
+
+## DEC-0021 — Bound wide-screen location content
+
+Date: 2026-08-17
+Status: Accepted
+
+### Question
+How should reference-inspired location lists render on a 2560×1600 tablet?
+
+### Options considered
+- Stretch every row edge to edge
+- Create a separate tablet navigation rail
+- Preserve the hierarchy and constrain reading width
+
+### Research / evidence
+- The API 36 Pixel Tablet profile passed navigation but produced excessively long 2464-pixel rows.
+
+### Decision
+Center location and station-list content in a 960 logical-pixel maximum while keeping the app bar full width.
+
+### Why
+It preserves the minimal reference language and touch behavior while improving scan distance on tablets.
+
+### Trade-offs
+- Large tablets retain intentional side whitespace.
+
+### Revisit if
+Dhwani adds a master-detail tablet browser.
+
+## DEC-0022 — Replace the audio-only FFmpeg build with the LGPL full build
+
+Date: 2026-08-17
+Status: Accepted
+
+Supersedes the recording-package portion of DEC-0006.
+
+### Question
+Which FFmpegKit variant actually records modern HTTPS radio streams while retaining stream copy, FFprobe, and optional audio conversion?
+
+### Options considered
+- Keep `ffmpeg_kit_flutter_new_audio`
+- Downgrade stations to cleartext HTTP
+- Use the HTTPS-only build and remove format conversion
+- Use `ffmpeg_kit_flutter_new_full` without GPL components
+
+### Research / evidence
+- A fresh API 36 recording test proved that the audio-only native binary returned `https protocol not found` despite loading successfully.
+- `ffmpeg_kit_flutter_new_full` 2.5.2 includes TLS and audio libraries, supports Android API 24+, Windows, FFprobe and SAF, and is LGPL-3.0 without GPL components.
+- After replacement, a real Radio Swiss Jazz HTTPS stream produced a non-empty, FFprobe-recognized MP3 recording and the integration test deleted it cleanly.
+
+### Decision
+Use `ffmpeg_kit_flutter_new_full` 2.5.2, retain stream copy by default, and send a Dhwani user agent with bounded stream reconnect options.
+
+### Why
+Network recording must work with the HTTPS sources Dhwani intentionally prefers. The full non-GPL build is larger but is the smallest verified variant that preserves TLS plus requested conversion choices.
+
+### Trade-offs
+- Android artifacts are larger than the audio-only build.
+- The dependency is LGPL-3.0 and requires the documented licence/redistribution obligations.
+
+### Revisit if
+A maintained smaller build combines TLS with the needed audio encoders and passes the same device recording test.

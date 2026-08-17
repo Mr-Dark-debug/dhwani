@@ -15,6 +15,8 @@ class DiscoverScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final stations =
         ref.watch(stationsProvider).value ?? const <RadioStation>[];
+    final recent = ref.watch(historyProvider).value ?? const <RadioStation>[];
+    final saved = ref.watch(favouritesProvider).value ?? const <RadioStation>[];
     final sections = <String, List<RadioStation>>{
       'Around Darbhanga': stations
           .where((station) => station.city == 'Darbhanga')
@@ -32,6 +34,13 @@ class DiscoverScreen extends ConsumerWidget {
             ),
           )
           .toList(),
+      'Hindi': stations
+          .where(
+            (station) => station.languages.any(
+              (language) => language.toLowerCase().contains('hindi'),
+            ),
+          )
+          .toList(),
       'News': stations
           .where(
             (station) =>
@@ -40,6 +49,14 @@ class DiscoverScreen extends ConsumerWidget {
           .toList(),
       'Popular worldwide': [...stations]
         ..sort((a, b) => b.clickCount.compareTo(a.clickCount)),
+      'Continue listening': recent,
+      'Saved stations': saved,
+      'High-quality streams': stations
+          .where(
+            (station) =>
+                station.streams.any((stream) => (stream.bitrate ?? 0) >= 128),
+          )
+          .toList(),
     }..removeWhere((_, value) => value.isEmpty);
     return DhwaniShell(
       title: 'Discover',
@@ -57,12 +74,7 @@ class DiscoverScreen extends ConsumerWidget {
             borderRadius: BorderRadius.circular(24),
             onTap: stations.isEmpty
                 ? null
-                : () => _open(
-                    context,
-                    ref,
-                    stations[Random().nextInt(stations.length)],
-                    stations,
-                  ),
+                : () => _surprise(context, ref, stations),
             child: Ink(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
@@ -116,6 +128,67 @@ class DiscoverScreen extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _surprise(
+    BuildContext context,
+    WidgetRef ref,
+    List<RadioStation> stations,
+  ) async {
+    final filter = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              title: Text('Surprise Me'),
+              subtitle: Text('Choose a real metadata filter'),
+            ),
+            for (final entry in const {
+              'world': 'Worldwide',
+              'india': 'India only',
+              'maithili': 'Maithili',
+              'hindi': 'Hindi',
+              'news': 'News',
+              'music': 'Music',
+            }.entries)
+              ListTile(
+                title: Text(entry.value),
+                onTap: () => Navigator.pop(context, entry.key),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (filter == null || !context.mounted) return;
+    final candidates = stations.where((station) {
+      return switch (filter) {
+        'india' => station.countryCode == 'IN',
+        'maithili' || 'hindi' => station.languages.any(
+          (language) => language.toLowerCase().contains(filter),
+        ),
+        'news' || 'music' => station.tags.any(
+          (tag) => tag.toLowerCase().contains(filter),
+        ),
+        _ => true,
+      };
+    }).toList();
+    if (candidates.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No playable station matches that filter.'),
+        ),
+      );
+      return;
+    }
+    await _open(
+      context,
+      ref,
+      candidates[Random().nextInt(candidates.length)],
+      candidates,
     );
   }
 

@@ -7,12 +7,12 @@
 ## What works
 
 - Country, state, and city browsing backed by cached Radio Browser data and an India-specific Akashvani source.
-- Global debounced search across station, country, state, city, language, tags, frequency, and band.
+- Cache-first, debounced global search across station, country, state, city, language, tags, frequency, and band, with recent-search management and remote result merging.
 - One central live player with MP3/AAC/HLS support through platform decoders, truthful connection states, stream failover, ICY metadata, next/previous queues, AM/FM/NET filtering, volume, sleep timer, and a draggable/snapping custom tuner.
 - Android background audio with media notification, lock-screen/Bluetooth/headset play, pause, previous, next, stop, audio focus, interruption handling, and noisy-output pause.
-- Local favourites, listening history, custom stations, station health metadata, last-station restoration, and structured Drift/SQLite persistence.
+- Searchable/reorderable favourites, optional collections, listening duration/play counts, custom stations, durable source health, last-station restoration, and structured Drift/SQLite persistence.
 - Network-stream recording with stream copy, timer, FFprobe validation, playback, rename, details, sharing, Android Storage Access Framework export, and deletion. Dhwani never requests microphone permission.
-- Recordings library, storage totals, light/dark/system appearance, reduced motion, Wi-Fi-only playback, real-alternative bitrate preference, local JSON backup/import, Car Mode, and policy-aware alarm/recording reminders.
+- Recordings library with seek, storage totals, original/MP3/M4A output choices, light/dark/system appearance, reduced motion, Android equalizer presets/custom bands, Wi-Fi-only playback, real-alternative bitrate preference, local JSON backup/import, Car Mode, persistent fade-out sleep timing, and selected-weekday alarm/recording reminders.
 - Offline opening of cached catalogue, favourites, history, custom RF metadata, and local recordings. Live controls explain when a network stream is unavailable.
 
 ## Screenshots
@@ -21,7 +21,7 @@
 | --- | --- | --- | --- | --- |
 | ![Countries](artifacts/screenshots/02-countries.png) | ![Player](artifacts/screenshots/12-swiss-player-live.png) | ![Notification](artifacts/screenshots/13-background-notification.png) | ![Recording](artifacts/screenshots/15-recording-active.png) | ![Dark settings](artifacts/screenshots/21-settings-dark.png) |
 
-Additional inspected screenshots live in `artifacts/screenshots/`, including the splash, state/city flow, Darbhanga list, player states, SAF export, 1.3× text scaling, and landscape layout.
+Additional inspected screenshots live in `artifacts/screenshots/`, including the splash, state/city flow, Darbhanga list, player states, SAF export, 1.3× text scaling, dark mode, compact-phone and tablet layouts.
 
 ## Architecture
 
@@ -79,7 +79,7 @@ Android uses a typed `mediaPlayback` foreground service through `audio_service`.
 
 ## Recording and licensing
 
-Recording captures the **network stream**, not the microphone. `ffmpeg_kit_flutter_new_audio` 2.5.2 provides the maintained audio-only FFmpeg 8.1.2 bundle under LGPL-3.0; the original retired FFmpegKit and unnecessary GPL video bundles were rejected. Dhwani requests stream copy (`-c copy`) where the source permits it, stops only its owned session, and accepts a recording only after a non-empty file and FFprobe duration/format check.
+Recording captures the **network stream**, not the microphone. `ffmpeg_kit_flutter_new_full` 2.5.2 provides the maintained non-GPL FFmpeg 8.1.2 bundle with TLS and audio codecs under LGPL-3.0. Device testing rejected the smaller audio-only variant because its native binary lacked HTTPS protocol support; the original retired FFmpegKit and GPL builds are also rejected. Dhwani requests stream copy (`-c copy`) where the source permits it, stops only its owned session, and accepts a recording only after a non-empty file and FFprobe duration/format check.
 
 Native FFmpeg libraries make the universal APK large. The AAB lets Google Play deliver ABI-specific splits. Full research and trade-offs are in [research.md](research.md) and [decision.md](decision.md).
 
@@ -89,7 +89,7 @@ Native FFmpeg libraries make the universal APK large. The AAB lets Google Play d
 - Minimum SDK: 24
 - Compile/target SDK: 36 (Android 16)
 - Edge-to-edge status/navigation bars, predictive-back-compatible routing, scoped storage, contextual Android 13+ notification permission, and typed media foreground service.
-- Verified on the `Dhwani_Pixel_10_Approx` Pixel-class AVD: Android 16/API 36, 1280×2856, 480 dpi. A physical Pixel 10 was not connected, so this approximation is explicitly recorded in [test_report.md](test_report.md).
+- Verified on three Android 16/API 36 profiles: `Dhwani_Compact_API36` (720×1280, 320 dpi), `Dhwani_Pixel_10_Approx` (1280×2856, 480 dpi), and `Dhwani_Tablet_API36` (2560×1600, 320 dpi). A physical Pixel 10 was not connected, so the Pixel profile remains an explicit approximation in [test_report.md](test_report.md).
 
 ## Android permissions
 
@@ -119,9 +119,11 @@ flutter analyze
 flutter test
 flutter test integration_test/onboarding_flow_test.dart -d emulator-5554
 flutter test integration_test/custom_station_flow_test.dart -d emulator-5554
+flutter test integration_test/onboarding_flow_test.dart -d emulator-5556
+flutter test integration_test/onboarding_flow_test.dart -d emulator-5558
 ```
 
-The automated suite covers domain parsing and stream ranking, terrestrial band parsing, tuning queue widening/sorting, favourites/history/custom persistence, backup structure, recording filenames, branding semantics, onboarding navigation, and custom-station creation/reopening. Live audio, Android media session, foreground notification controls, recording, playback, and SAF export were additionally exercised on-device; see [test_report.md](test_report.md).
+The automated suite covers domain parsing and stream ranking, deterministic directory mirror failover/malformed data, terrestrial band parsing, tuning queue widening/sorting, favourite order, history metrics, collections, stream health, custom persistence, constrained backup import, recording filenames, search/sort/settings widgets, branding semantics, onboarding navigation, and custom-station creation/reopening. Live audio, Android media session, foreground notification controls, recording, playback, and SAF export were additionally exercised on-device; see [test_report.md](test_report.md).
 
 ## Build
 

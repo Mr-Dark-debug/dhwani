@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
@@ -38,12 +39,33 @@ class DhwaniPlayerSnapshot {
 
 class DhwaniAudioHandler extends BaseAudioHandler
     with QueueHandler, SeekHandler {
-  DhwaniAudioHandler() {
+  DhwaniAudioHandler({
+    Future<void> Function(RadioStation station, Duration duration)?
+    onSessionEnded,
+    Future<void> Function(
+      RadioStation station,
+      StationStream stream,
+      bool success,
+    )?
+    onStreamResult,
+  }) : _onSessionEnded = onSessionEnded,
+       _onStreamResult = onStreamResult {
     _init();
   }
 
-  final AudioPlayer _player = AudioPlayer(
+  final Future<void> Function(RadioStation station, Duration duration)?
+  _onSessionEnded;
+  final Future<void> Function(
+    RadioStation station,
+    StationStream stream,
+    bool success,
+  )?
+  _onStreamResult;
+
+  final AndroidEqualizer _equalizer = AndroidEqualizer();
+  late final AudioPlayer _player = AudioPlayer(
     userAgent: 'Dhwani/1.0 (com.prashant.dhwani)',
+    audioPipeline: AudioPipeline(androidAudioEffects: [_equalizer]),
   );
   final BehaviorSubject<DhwaniPlayerSnapshot> snapshot = BehaviorSubject.seeded(
     const DhwaniPlayerSnapshot(status: DhwaniPlaybackStatus.idle),
@@ -53,21 +75,104 @@ class DhwaniAudioHandler extends BaseAudioHandler
   StationStream? _activeStream;
   StreamSubscription<AudioInterruptionEvent>? _interruption;
   StreamSubscription<void>? _noisy;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
+  Timer? _reconnectTimer;
+  DateTime? _sessionStartedAt;
+  RadioStation? _sessionStation;
 
   RadioStation? get currentStation =>
       _index >= 0 && _index < _stations.length ? _stations[_index] : null;
   bool _wifiOnly = false;
   bool _preferLowerBitrate = false;
+  bool _autoReconnect = true;
+  bool _networkWasUnavailable = false;
+  String _equalizerPreset = 'flat';
+  String _equalizerConfiguration = 'flat';
 
   void configureNetworkPolicy({
     required bool wifiOnly,
     required bool preferLowerBitrate,
+    required bool autoReconnect,
   }) {
     _wifiOnly = wifiOnly;
     _preferLowerBitrate = preferLowerBitrate;
+    _autoReconnect = autoReconnect;
   }
 
   StationStream? get activeStream => _activeStream;
+  bool get equalizerSupported => Platform.isAndroid;
+  String get equalizerPreset => _equalizerPreset;
+
+  void configureEqualizer(
+    String preset, {
+    List<double> customGains = const [],
+  }) {
+    final configuration = '$preset:${customGains.join(',')}';
+    if (!equalizerSupported || configuration == _equalizerConfiguration) return;
+    _equalizerPreset = preset;
+    _equalizerConfiguration = configuration;
+    unawaited(_applyEqualizerPreset(preset, customGains));
+  }
+
+  Future<AndroidEqualizerParameters?> equalizerParameters() async {
+    if (!equalizerSupported) return null;
+    try {
+      await _equalizer.setEnabled(true).timeout(const Duration(seconds: 5));
+      return await _equalizer.parameters.timeout(const Duration(seconds: 5));
+    } catch (error, stack) {
+      DhwaniLog.player('Android equalizer is unavailable', error, stack);
+      return null;
+    }
+  }
+
+  Future<void> setEqualizerBand(int index, double gain) async {
+    final parameters = await equalizerParameters();
+    if (parameters == null || index < 0 || index >= parameters.bands.length) {
+      return;
+    }
+    await parameters.bands[index].setGain(
+      gain.clamp(parameters.minDecibels, parameters.maxDecibels).toDouble(),
+    );
+    _equalizerPreset = 'custom';
+  }
+
+  Future<void> _applyEqualizerPreset(
+    String preset,
+    List<double> customGains,
+  ) async {
+    final parameters = await equalizerParameters();
+    if (parameters == null) return;
+    for (final band in parameters.bands) {
+      final frequency = band.centerFrequency;
+      final gain = switch (preset) {
+        'custom' when band.index < customGains.length =>
+          customGains[band.index],
+        'voice' =>
+          frequency >= 300 && frequency <= 3500
+              ? 4.0
+              : frequency < 150
+              ? -2.0
+              : -1.0,
+        'bass' =>
+          frequency < 250
+              ? 5.0
+              : frequency > 4000
+              ? -1.0
+              : 0.0,
+        'treble' =>
+          frequency > 4000
+              ? 5.0
+              : frequency < 250
+              ? -1.0
+              : 0.0,
+        _ => 0.0,
+      };
+      await band.setGain(
+        gain.clamp(parameters.minDecibels, parameters.maxDecibels).toDouble(),
+      );
+    }
+    await _equalizer.setEnabled(preset != 'flat');
+  }
 
   Future<void> _init() async {
     final session = await AudioSession.instance;
@@ -77,6 +182,25 @@ class DhwaniAudioHandler extends BaseAudioHandler
     });
     _noisy = session.becomingNoisyEventStream.listen((_) {
       if (_player.playing) pause();
+    });
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((
+      results,
+    ) {
+      final available = results.any(
+        (result) => result != ConnectivityResult.none,
+      );
+      if (!available) {
+        _networkWasUnavailable = true;
+        return;
+      }
+      if (_networkWasUnavailable &&
+          _autoReconnect &&
+          snapshot.value.status == DhwaniPlaybackStatus.error &&
+          currentStation?.canPlay == true) {
+        _networkWasUnavailable = false;
+        _reconnectTimer?.cancel();
+        _reconnectTimer = Timer(const Duration(seconds: 1), play);
+      }
     });
     _player.playbackEventStream.listen(
       (_) => _broadcastState(),
@@ -131,6 +255,7 @@ class DhwaniAudioHandler extends BaseAudioHandler
     RadioStation station, {
     bool autoplay = false,
   }) async {
+    if (currentStation?.id != station.id) await _finishSession();
     final found = _stations.indexWhere((item) => item.id == station.id);
     if (found < 0) {
       _stations = [station, ..._stations];
@@ -159,6 +284,7 @@ class DhwaniAudioHandler extends BaseAudioHandler
         _player.processingState != ProcessingState.idle &&
         _player.processingState != ProcessingState.completed) {
       await _player.play();
+      _beginSession(station);
       snapshot.add(
         DhwaniPlayerSnapshot(
           status: DhwaniPlaybackStatus.playing,
@@ -202,7 +328,21 @@ class DhwaniAudioHandler extends BaseAudioHandler
       ),
     );
     Object? lastError;
-    final streams = station.rankedStreams;
+    final streams = station.rankedStreams.where((stream) {
+      final scheme = Uri.tryParse(stream.url)?.scheme.toLowerCase();
+      return scheme != 'http' || station.userAdded;
+    }).toList();
+    if (streams.isEmpty) {
+      snapshot.add(
+        DhwaniPlayerSnapshot(
+          status: DhwaniPlaybackStatus.error,
+          station: station,
+          message:
+              'This directory stream uses unencrypted HTTP. Add it as a trusted custom station to play it.',
+        ),
+      );
+      return;
+    }
     if (_preferLowerBitrate && !unmetered) {
       streams.sort(
         (a, b) => (a.bitrate ?? 1 << 30).compareTo(b.bitrate ?? 1 << 30),
@@ -220,6 +360,8 @@ class DhwaniAudioHandler extends BaseAudioHandler
               },
             );
         await _player.play();
+        _beginSession(station);
+        await _onStreamResult?.call(station, stream, true);
         snapshot.add(
           DhwaniPlayerSnapshot(
             status: DhwaniPlaybackStatus.playing,
@@ -230,6 +372,7 @@ class DhwaniAudioHandler extends BaseAudioHandler
         return;
       } catch (error, stack) {
         await _player.stop();
+        await _onStreamResult?.call(station, stream, false);
         lastError = error;
         DhwaniLog.player('Stream failed: ${stream.url}', error, stack);
         snapshot.add(
@@ -255,6 +398,7 @@ class DhwaniAudioHandler extends BaseAudioHandler
   @override
   Future<void> pause() async {
     await _player.pause();
+    await _finishSession();
     snapshot.add(
       DhwaniPlayerSnapshot(
         status: DhwaniPlaybackStatus.paused,
@@ -267,6 +411,7 @@ class DhwaniAudioHandler extends BaseAudioHandler
   @override
   Future<void> stop() async {
     await _player.stop();
+    await _finishSession();
     snapshot.add(
       DhwaniPlayerSnapshot(
         status: DhwaniPlaybackStatus.ready,
@@ -381,9 +526,29 @@ class DhwaniAudioHandler extends BaseAudioHandler
     }
   }
 
+  void _beginSession(RadioStation station) {
+    if (_sessionStartedAt != null && _sessionStation?.id == station.id) return;
+    _sessionStartedAt = DateTime.now();
+    _sessionStation = station;
+  }
+
+  Future<void> _finishSession() async {
+    final startedAt = _sessionStartedAt;
+    final station = _sessionStation;
+    _sessionStartedAt = null;
+    _sessionStation = null;
+    if (startedAt == null || station == null || _onSessionEnded == null) return;
+    final duration = DateTime.now().difference(startedAt);
+    if (duration < const Duration(seconds: 1)) return;
+    await _onSessionEnded(station, duration);
+  }
+
   Future<void> disposeHandler() async {
+    await _finishSession();
     await _interruption?.cancel();
     await _noisy?.cancel();
+    await _connectivitySubscription?.cancel();
+    _reconnectTimer?.cancel();
     await snapshot.close();
     await _player.dispose();
   }

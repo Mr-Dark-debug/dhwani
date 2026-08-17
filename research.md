@@ -73,3 +73,14 @@ The repository was empty at project start. Package versions, Android target requ
 ## 2026-08-17 — Competitive interaction review
 
 TuneIn, Simple Radio, myTuner, Radio Garden, and Radioplayer were reviewed at a product-pattern level. Useful common patterns retained in an original interface: persistent mini-player, immediate connection feedback, notification controls, location/language discovery, recents, favourites, sleep timing, and simple car controls. Dhwani deliberately keeps its own editorial tuner/frequency hero and does not copy any competitor screen.
+
+## 2026-08-17 — Behavioral close-out research
+
+- Android foreground-service start restrictions: https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start
+- Android alarm guidance and exact-alarm privilege: https://developer.android.com/develop/background-work/services/alarms
+- Android 15 foreground-service changes: https://developer.android.com/about/versions/15/changes/foreground-service-types
+- `flutter_timezone` 5.1.0: Apache-2.0 and multi-platform; selected for the device IANA identifier used by repeated reminder schedules.
+- just_audio 0.10.6 documents `AndroidEqualizer`; Android's official `AudioEffect` API confirms effects attach to a player audio session. Dhwani exposes equalization only on Android.
+- Dio 5.9.2's public `HttpClientAdapter` contract supports deterministic mirror-failure and malformed-response tests without real network dependence.
+- A dedicated Android notification status icon is derived from Dhwani's monochrome adaptive-icon mark; the colored launcher icon is no longer used as a small notification glyph.
+- Recording backend correction: API 36 testing proved `ffmpeg_kit_flutter_new_audio` 2.5.2 was compiled without HTTPS protocol support. It was rejected and replaced by `ffmpeg_kit_flutter_new_full` 2.5.2, whose current pub.dev metadata identifies FFmpeg 8.1.2, Android API 24+, Android/iOS/Linux/macOS/Windows support, no GPL components, and LGPL-3.0 licensing. A real HTTPS MP3 recording passed after the replacement.

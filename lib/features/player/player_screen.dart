@@ -11,6 +11,7 @@ import '../../app/providers.dart';
 import '../../app/theme/dhwani_theme.dart';
 import '../../core/audio/dhwani_audio_handler.dart';
 import '../../core/recording/recording_service.dart';
+import '../../core/settings/settings_controller.dart';
 import '../../core/widgets/dhwani_shell.dart';
 import '../../data/models/radio_station.dart';
 
@@ -42,11 +43,20 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       final value = restored;
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         ref.read(selectedStationProvider.notifier).select(value);
-        final queue = tuningQueue(all, current: value);
+        final queue = tuningQueue(
+          all,
+          current: value,
+          preferredScope: ref.read(settingsProvider).defaultScope,
+        );
         await ref
             .read(audioHandlerProvider)
             .setQueueStations(queue, selected: value);
-        await ref.read(audioHandlerProvider).selectStation(value);
+        await ref
+            .read(audioHandlerProvider)
+            .selectStation(
+              value,
+              autoplay: ref.read(settingsProvider).autoPlay,
+            );
       });
       station = restored;
     }
@@ -82,7 +92,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
         ref.watch(recordingSnapshotProvider).value ??
         const RecordingSnapshot(status: RecordingStatus.idle);
     final band = ref.watch(bandFilterProvider);
-    final queue = tuningQueue(all, current: station, band: band);
+    final queue = tuningQueue(
+      all,
+      current: station,
+      band: band,
+      preferredScope: ref.watch(settingsProvider).defaultScope,
+    );
     return DhwaniShell(
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -127,6 +142,8 @@ class _PlayerContent extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final largeText = MediaQuery.textScalerOf(context).scale(1) > 1.1;
+    final tight = compact && largeText;
     final playing = snapshot.status == DhwaniPlaybackStatus.playing;
     final busy =
         snapshot.status == DhwaniPlaybackStatus.loading ||
@@ -163,7 +180,13 @@ class _PlayerContent extends ConsumerWidget {
             ),
           ],
         ),
-        SizedBox(height: compact ? 12 : 32),
+        SizedBox(
+          height: tight
+              ? 4
+              : compact
+              ? 12
+              : 32,
+        ),
         Semantics(
           header: true,
           label: '${station.frequencyDisplay} ${station.frequencySubtitle}',
@@ -177,7 +200,11 @@ class _PlayerContent extends ConsumerWidget {
                     '0',
                   ),
                   style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                    fontSize: compact ? 66 : 92,
+                    fontSize: tight
+                        ? 56
+                        : compact
+                        ? 66
+                        : 92,
                   ),
                 ),
               ),
@@ -190,7 +217,7 @@ class _PlayerContent extends ConsumerWidget {
                   ).colorScheme.onSurface.withValues(alpha: .45),
                 ),
               ),
-              const SizedBox(height: 13),
+              SizedBox(height: tight ? 5 : 13),
               Text(
                 station.name,
                 textAlign: TextAlign.center,
@@ -206,11 +233,21 @@ class _PlayerContent extends ConsumerWidget {
             ],
           ),
         ),
-        SizedBox(height: compact ? 14 : 28),
+        SizedBox(
+          height: tight
+              ? 6
+              : compact
+              ? 14
+              : 28,
+        ),
         TunerScale(
           stations: queue,
           current: station,
-          height: compact ? 118 : 164,
+          height: tight
+              ? 72
+              : compact
+              ? 98
+              : 164,
           onStation: (next) async {
             HapticFeedback.selectionClick();
             ref.read(selectedStationProvider.notifier).select(next);
@@ -223,7 +260,13 @@ class _PlayerContent extends ConsumerWidget {
             await ref.read(catalogueRepositoryProvider).addHistory(next);
           },
         ),
-        SizedBox(height: compact ? 14 : 28),
+        SizedBox(
+          height: tight
+              ? 2
+              : compact
+              ? 8
+              : 28,
+        ),
         if (snapshot.icyTitle != null) ...[
           Text(
             snapshot.icyTitle!,
@@ -261,7 +304,7 @@ class _PlayerContent extends ConsumerWidget {
                     ? null
                     : () => playing
                           ? ref.read(audioHandlerProvider).pause()
-                          : ref.read(audioHandlerProvider).play(),
+                          : playWithMediaNotification(ref),
                 style: FilledButton.styleFrom(
                   minimumSize: Size.fromHeight(compact ? 62 : 74),
                   backgroundColor: playing
@@ -309,7 +352,7 @@ class _PlayerContent extends ConsumerWidget {
             ),
           ],
         ),
-        const SizedBox(height: 14),
+        SizedBox(height: compact ? 4 : 14),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
@@ -375,6 +418,15 @@ class _PlayerContent extends ConsumerWidget {
               _showVolume(context, ref);
             },
           ),
+          if (ref.read(audioHandlerProvider).equalizerSupported)
+            ListTile(
+              leading: const Icon(Icons.equalizer_rounded),
+              title: const Text('Equalizer'),
+              onTap: () {
+                Navigator.pop(context);
+                _showEqualizer(context, ref);
+              },
+            ),
           ListTile(
             leading: const Icon(Icons.info_outline),
             title: const Text('Station info'),
@@ -845,6 +897,9 @@ void showStationInfo(
                 : 'Direct stream',
             'Directory': station.directory.name,
             'Health': station.health.name,
+            'Last checked':
+                station.lastChecked?.toLocal().toString() ?? 'Not checked yet',
+            'Homepage': station.homepage ?? 'Not reported',
             'Current URL':
                 snapshot.stream?.url ??
                 station.streams.firstOrNull?.url ??
@@ -880,6 +935,87 @@ void showStationInfo(
               ref.read(audioHandlerProvider).retry();
             },
             child: const Text('Retry station'),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: station.streams.isEmpty
+                    ? null
+                    : () async {
+                        await Clipboard.setData(
+                          ClipboardData(
+                            text:
+                                snapshot.stream?.url ??
+                                station.streams.first.url,
+                          ),
+                        );
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Stream URL copied.')),
+                          );
+                        }
+                      },
+                icon: const Icon(Icons.copy_rounded),
+                label: const Text('Copy URL'),
+              ),
+              if (station.streams.length > 1)
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final current = snapshot.stream?.url;
+                    final alternatives = [
+                      ...station.streams.where(
+                        (stream) => stream.url != current,
+                      ),
+                      ...station.streams.where(
+                        (stream) => stream.url == current,
+                      ),
+                    ];
+                    final alternate = station.copyWith(streams: alternatives);
+                    await ref
+                        .read(audioHandlerProvider)
+                        .selectStation(alternate, autoplay: true);
+                    if (context.mounted) Navigator.pop(context);
+                  },
+                  icon: const Icon(Icons.swap_horiz_rounded),
+                  label: const Text('Try alternative'),
+                ),
+              if (station.homepage != null)
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final uri = Uri.tryParse(station.homepage!);
+                    if (uri != null) await launchUrl(uri);
+                  },
+                  icon: const Icon(Icons.open_in_new_rounded),
+                  label: const Text('Website'),
+                ),
+              OutlinedButton.icon(
+                onPressed: () => SharePlus.instance.share(
+                  ShareParams(
+                    text:
+                        '${station.name}\n${station.country}\n${station.frequencyDisplay} ${station.frequencySubtitle}\n${station.homepage ?? ''}',
+                  ),
+                ),
+                icon: const Icon(Icons.share_outlined),
+                label: const Text('Share'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  await ref.read(databaseProvider).reportBroken(station.id);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Broken report saved locally.'),
+                      ),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.report_outlined),
+                label: const Text('Report broken'),
+              ),
+            ],
           ),
         ],
       ),
@@ -1034,6 +1170,142 @@ void _showVolume(BuildContext context, WidgetRef ref) {
               const Icon(Icons.volume_up),
             ],
           ),
+        ),
+      ),
+    ),
+  );
+}
+
+void _showEqualizer(BuildContext context, WidgetRef ref) {
+  var selectedPreset = ref.read(settingsProvider).equalizerPreset;
+  showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (context) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+        child: FutureBuilder(
+          future: ref.read(audioHandlerProvider).equalizerParameters(),
+          builder: (context, snapshot) {
+            final parameters = snapshot.data;
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const SizedBox(
+                height: 180,
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (parameters == null) {
+              return const SizedBox(
+                height: 180,
+                child: Center(
+                  child: Text(
+                    'Equalizer is not available for this audio session.',
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              );
+            }
+            return StatefulBuilder(
+              builder: (context, setSheetState) => Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Equalizer',
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    children:
+                        const {
+                          'flat': 'Flat',
+                          'voice': 'Voice',
+                          'bass': 'Bass',
+                          'treble': 'Treble',
+                          'custom': 'Custom',
+                        }.entries.map((entry) {
+                          final selected = selectedPreset == entry.key;
+                          return ChoiceChip(
+                            label: Text(entry.value),
+                            selected: selected,
+                            onSelected: (_) async {
+                              if (entry.key == 'custom') return;
+                              final settings = ref.read(settingsProvider);
+                              await ref
+                                  .read(settingsProvider.notifier)
+                                  .update(
+                                    settings.copyWith(
+                                      equalizerPreset: entry.key,
+                                    ),
+                                  );
+                              ref
+                                  .read(audioHandlerProvider)
+                                  .configureEqualizer(entry.key);
+                              setSheetState(() => selectedPreset = entry.key);
+                            },
+                          );
+                        }).toList(),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 240,
+                    child: ListView(
+                      children: parameters.bands.map((band) {
+                        return Row(
+                          children: [
+                            SizedBox(
+                              width: 58,
+                              child: Text(
+                                band.centerFrequency >= 1000
+                                    ? '${(band.centerFrequency / 1000).toStringAsFixed(1)}k'
+                                    : '${band.centerFrequency.round()}Hz',
+                              ),
+                            ),
+                            Expanded(
+                              child: Slider(
+                                value: band.gain
+                                    .clamp(
+                                      parameters.minDecibels,
+                                      parameters.maxDecibels,
+                                    )
+                                    .toDouble(),
+                                min: parameters.minDecibels,
+                                max: parameters.maxDecibels,
+                                onChanged: (value) async {
+                                  await ref
+                                      .read(audioHandlerProvider)
+                                      .setEqualizerBand(band.index, value);
+                                  final settings = ref.read(settingsProvider);
+                                  await ref
+                                      .read(settingsProvider.notifier)
+                                      .update(
+                                        settings.copyWith(
+                                          equalizerPreset: 'custom',
+                                          equalizerGains: parameters.bands
+                                              .map((item) => item.gain)
+                                              .toList(),
+                                        ),
+                                      );
+                                  setSheetState(
+                                    () => selectedPreset = 'custom',
+                                  );
+                                },
+                              ),
+                            ),
+                            SizedBox(
+                              width: 44,
+                              child: Text('${band.gain.toStringAsFixed(1)} dB'),
+                            ),
+                          ],
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
         ),
       ),
     ),

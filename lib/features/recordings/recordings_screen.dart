@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -103,6 +104,9 @@ class _RecordingTile extends ConsumerWidget {
         await ref
             .read(audioHandlerProvider)
             .selectStation(station, autoplay: true);
+        if (context.mounted) {
+          _showRecordingPlayer(context, ref, entry);
+        }
       },
     ),
     title: Text(
@@ -222,6 +226,87 @@ class _RecordingTile extends ConsumerWidget {
           await ref.read(databaseProvider).deleteRecording(entry.id);
         }
     }
+  }
+}
+
+void _showRecordingPlayer(
+  BuildContext context,
+  WidgetRef ref,
+  RecordingEntry entry,
+) {
+  showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder: (context) => _RecordingPlayer(entry: entry),
+  );
+}
+
+class _RecordingPlayer extends ConsumerWidget {
+  const _RecordingPlayer({required this.entry});
+  final RecordingEntry entry;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final snapshot = ref.watch(playerSnapshotProvider).value;
+    final playing = snapshot?.status.name == 'playing';
+    final handler = ref.read(audioHandlerProvider);
+    final maximum = entry.duration.inMilliseconds
+        .toDouble()
+        .clamp(1, double.infinity)
+        .toDouble();
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 28),
+        child: StreamBuilder<PlaybackState>(
+          stream: handler.playbackState,
+          builder: (context, state) {
+            final position = (state.data?.updatePosition.inMilliseconds ?? 0)
+                .toDouble()
+                .clamp(0, maximum)
+                .toDouble();
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.graphic_eq_rounded, size: 48),
+                const SizedBox(height: 12),
+                Text(
+                  entry.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                Text(entry.station.name),
+                const SizedBox(height: 18),
+                Slider(
+                  value: position,
+                  max: maximum,
+                  label: _duration(Duration(milliseconds: position.round())),
+                  onChanged: (value) =>
+                      handler.seek(Duration(milliseconds: value.round())),
+                ),
+                Row(
+                  children: [
+                    Text(_duration(Duration(milliseconds: position.round()))),
+                    const Spacer(),
+                    Text(_duration(entry.duration)),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  onPressed: () => playing ? handler.pause() : handler.play(),
+                  icon: Icon(
+                    playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                  ),
+                  label: Text(playing ? 'Pause' : 'Play'),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
   }
 }
 

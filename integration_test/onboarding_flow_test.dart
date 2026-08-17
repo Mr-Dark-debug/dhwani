@@ -1,4 +1,5 @@
 import 'package:dhwani/main.dart' as app;
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -29,11 +30,45 @@ void main() {
     await tester.tap(find.text('Darbhanga'));
     await tester.pumpAndSettle(const Duration(seconds: 3));
 
-    expect(find.text('Akashvani Darbhanga'), findsOneWidget);
-    await tester.tap(find.text('Akashvani Darbhanga'));
+    expect(find.text('Akashvani Darbhanga'), findsWidgets);
+    await tester.tap(find.text('Akashvani Darbhanga').first);
     await tester.pumpAndSettle(const Duration(seconds: 3));
 
     expect(find.text('1296'), findsOneWidget);
     expect(find.text('Play live'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Band filter'));
+    await tester.pumpAndSettle();
+    expect(find.text('All'), findsOneWidget);
+    expect(find.text('AM'), findsWidgets);
+    expect(find.text('FM'), findsOneWidget);
+    expect(find.text('NET'), findsOneWidget);
+    await tester.tap(find.text('AM').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Save favourite'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Saved').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Akashvani Darbhanga'), findsWidgets);
+
+    await tester.tap(find.text('Discover').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Search'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, 'Maithili');
+    await tester.pump(const Duration(milliseconds: 650));
+    expect(find.text('Akashvani Darbhanga'), findsOneWidget);
+    await tester.tap(find.text('Akashvani Darbhanga'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Station information'));
+    await tester.pumpAndSettle();
+    final stationInfoList = find.byType(ListView).last;
+    await tester.drag(stationInfoList, const Offset(0, -480));
+    await tester.pumpAndSettle();
+    expect(find.text('Current URL'), findsOneWidget);
+    await tester.drag(stationInfoList, const Offset(0, -360));
+    await tester.pumpAndSettle();
+    expect(find.text('Retry station'), findsOneWidget);
   });
 }

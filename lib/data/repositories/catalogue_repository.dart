@@ -85,10 +85,24 @@ class CatalogueRepository {
   Future<List<RadioStation>> search(String query) async {
     final normalized = query.trim().toLowerCase();
     if (normalized.isEmpty) return const [];
-    final local = (await database.allStations())
+    final local = await searchLocal(query);
+    if (normalized.length < 3) return local;
+    return searchRemote(query, localResults: local);
+  }
+
+  Future<List<RadioStation>> searchLocal(String query) async {
+    final normalized = query.trim().toLowerCase();
+    if (normalized.isEmpty) return const [];
+    return (await database.allStations())
         .where((station) => station.searchableText.contains(normalized))
         .toList();
-    if (normalized.length < 3) return local;
+  }
+
+  Future<List<RadioStation>> searchRemote(
+    String query, {
+    List<RadioStation>? localResults,
+  }) async {
+    final local = localResults ?? await searchLocal(query);
     try {
       final remote = await radioBrowser.search(query);
       await database.upsertStations(remote);

@@ -30,7 +30,7 @@ Acceptance testing used `Dhwani_Pixel_10_Approx`, a Google Pixel-class Android 1
 
 Status: Open (platform policy)
 
-This release schedules visible alarm/recording reminders using inexact-while-idle delivery. Modern Android can block arbitrary unattended foreground-service starts, so Dhwani does not promise silent background playback or recording. Repeating-day schedules and guaranteed unattended capture are not claimed.
+This release schedules visible one-time and selected-weekday alarm/recording reminders using inexact-while-idle delivery. Modern Android can block arbitrary unattended foreground-service starts, so Dhwani does not promise silent background playback or recording. Guaranteed unattended capture is not claimed.
 
 ## 2026-08-17 — Release signing key unavailable
 
@@ -43,3 +43,9 @@ Release APK/AAB compilation succeeds, but local release outputs use the Android 
 Status: Open (test equipment)
 
 Playback evidence includes network bytes, buffered audio, ICY metadata, active AudioTrack/media session, background continuation, and notification state transitions. Final subjective audibility should be confirmed on the physical phone.
+
+## 2026-08-17 — Audio-only FFmpeg binary lacked HTTPS
+
+Status: **RESOLVED**
+
+Fresh API 36 integration testing found that the selected audio-only FFmpeg native binary returned `https protocol not found`. Dhwani now uses the non-GPL full 2.5.2 variant with TLS and audio libraries. Real HTTPS MP3 stream-copy and M4A conversion recordings both passed with FFprobe validation; temporary test recordings were deleted.

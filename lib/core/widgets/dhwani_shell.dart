@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../app/providers.dart';
 import '../audio/dhwani_audio_handler.dart';
@@ -35,7 +36,8 @@ class DhwaniShell extends ConsumerWidget {
           ? Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (snapshot?.station != null) MiniPlayer(snapshot: snapshot!),
+                if (snapshot?.station != null && location != '/radio')
+                  MiniPlayer(snapshot: snapshot!),
                 NavigationBar(
                   selectedIndex: selected < 0 ? 0 : selected,
                   onDestinationSelected: (index) => context.go(_paths[index]),
@@ -122,7 +124,7 @@ class MiniPlayer extends ConsumerWidget {
                 tooltip: playing ? 'Pause' : 'Play live',
                 onPressed: () => playing
                     ? ref.read(audioHandlerProvider).pause()
-                    : ref.read(audioHandlerProvider).play(),
+                    : playWithMediaNotification(ref),
                 icon: Icon(
                   playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
                 ),
@@ -141,10 +143,12 @@ class StationTile extends StatelessWidget {
     required this.station,
     required this.onTap,
     this.trailing,
+    this.subtitle,
   });
   final RadioStation station;
   final VoidCallback onTap;
   final Widget? trailing;
+  final String? subtitle;
 
   @override
   Widget build(BuildContext context) => Semantics(
@@ -161,15 +165,16 @@ class StationTile extends StatelessWidget {
         style: const TextStyle(fontWeight: FontWeight.w700),
       ),
       subtitle: Text(
-        [
-          if (station.city != null) station.city,
-          station.state,
-          station.frequency == null
-              ? 'NET'
-              : '${station.frequencyDisplay} ${station.frequencyUnit}',
-          if (station.languages.isNotEmpty)
-            station.languages.take(2).join(', '),
-        ].whereType<String>().join(' · '),
+        subtitle ??
+            [
+              if (station.city != null) station.city,
+              station.state,
+              station.frequency == null
+                  ? 'NET'
+                  : '${station.frequencyDisplay} ${station.frequencyUnit}',
+              if (station.languages.isNotEmpty)
+                station.languages.take(2).join(', '),
+            ].whereType<String>().join(' · '),
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
       ),
@@ -185,17 +190,35 @@ class _StationMonogram extends StatelessWidget {
   final double size;
 
   @override
-  Widget build(BuildContext context) => Container(
-    width: size,
-    height: size,
-    alignment: Alignment.center,
-    decoration: BoxDecoration(
+  Widget build(BuildContext context) {
+    final uri = Uri.tryParse(station.favicon?.trim() ?? '');
+    final validArtwork =
+        uri != null && uri.scheme == 'https' && uri.host.isNotEmpty;
+    final fallback = Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
       color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .07),
+      child: Text(
+        station.name.trim().isEmpty
+            ? 'D'
+            : station.name.trim()[0].toUpperCase(),
+        style: TextStyle(fontSize: size * .4, fontWeight: FontWeight.w800),
+      ),
+    );
+    return ClipRRect(
       borderRadius: BorderRadius.circular(size * .32),
-    ),
-    child: Text(
-      station.name.trim().isEmpty ? 'D' : station.name.trim()[0].toUpperCase(),
-      style: TextStyle(fontSize: size * .4, fontWeight: FontWeight.w800),
-    ),
-  );
+      child: validArtwork
+          ? CachedNetworkImage(
+              imageUrl: uri.toString(),
+              width: size,
+              height: size,
+              fit: BoxFit.cover,
+              fadeInDuration: const Duration(milliseconds: 160),
+              placeholder: (_, _) => fallback,
+              errorWidget: (_, _, _) => fallback,
+            )
+          : fallback,
+    );
+  }
 }

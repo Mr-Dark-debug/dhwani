@@ -26,6 +26,24 @@ void main() {
 
     expect(queue.map((station) => station.id), ['b', 'a', 'c']);
   });
+
+  test('preferred country scope starts with all playable country stations', () {
+    final darbhanga = _station('darbhanga', 'Darbhanga', 'Bihar', 1296);
+    final delhi = _station('delhi', 'Delhi', 'Delhi', 819);
+    final foreign = RadioStation.fromJson({
+      ..._station('foreign', 'Berlin', 'Berlin', 855).toJson(),
+      'country': 'Germany',
+      'countryCode': 'DE',
+    });
+
+    final queue = tuningQueue(
+      [darbhanga, delhi, foreign],
+      current: darbhanga,
+      preferredScope: 'country',
+    );
+
+    expect(queue.map((station) => station.id), ['delhi', 'darbhanga']);
+  });
 }
 
 RadioStation _station(

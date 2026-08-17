@@ -1558,6 +1558,690 @@ class BrokenReportsCompanion extends UpdateCompanion<BrokenReport> {
   }
 }
 
+class $StationCollectionsTable extends StationCollections
+    with TableInfo<$StationCollectionsTable, StationCollection> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $StationCollectionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, name, sortOrder, createdAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'station_collections';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StationCollection> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  StationCollection map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StationCollection(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $StationCollectionsTable createAlias(String alias) {
+    return $StationCollectionsTable(attachedDatabase, alias);
+  }
+}
+
+class StationCollection extends DataClass
+    implements Insertable<StationCollection> {
+  final String id;
+  final String name;
+  final int sortOrder;
+  final DateTime createdAt;
+  const StationCollection({
+    required this.id,
+    required this.name,
+    required this.sortOrder,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['name'] = Variable<String>(name);
+    map['sort_order'] = Variable<int>(sortOrder);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  StationCollectionsCompanion toCompanion(bool nullToAbsent) {
+    return StationCollectionsCompanion(
+      id: Value(id),
+      name: Value(name),
+      sortOrder: Value(sortOrder),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory StationCollection.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StationCollection(
+      id: serializer.fromJson<String>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'name': serializer.toJson<String>(name),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  StationCollection copyWith({
+    String? id,
+    String? name,
+    int? sortOrder,
+    DateTime? createdAt,
+  }) => StationCollection(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    sortOrder: sortOrder ?? this.sortOrder,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  StationCollection copyWithCompanion(StationCollectionsCompanion data) {
+    return StationCollection(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StationCollection(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, name, sortOrder, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StationCollection &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.sortOrder == this.sortOrder &&
+          other.createdAt == this.createdAt);
+}
+
+class StationCollectionsCompanion extends UpdateCompanion<StationCollection> {
+  final Value<String> id;
+  final Value<String> name;
+  final Value<int> sortOrder;
+  final Value<DateTime> createdAt;
+  final Value<int> rowid;
+  const StationCollectionsCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  StationCollectionsCompanion.insert({
+    required String id,
+    required String name,
+    this.sortOrder = const Value.absent(),
+    required DateTime createdAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       name = Value(name),
+       createdAt = Value(createdAt);
+  static Insertable<StationCollection> custom({
+    Expression<String>? id,
+    Expression<String>? name,
+    Expression<int>? sortOrder,
+    Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (sortOrder != null) 'sort_order': sortOrder,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  StationCollectionsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? name,
+    Value<int>? sortOrder,
+    Value<DateTime>? createdAt,
+    Value<int>? rowid,
+  }) {
+    return StationCollectionsCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      sortOrder: sortOrder ?? this.sortOrder,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StationCollectionsCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $CollectionMembersTable extends CollectionMembers
+    with TableInfo<$CollectionMembersTable, CollectionMember> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CollectionMembersTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _collectionIdMeta = const VerificationMeta(
+    'collectionId',
+  );
+  @override
+  late final GeneratedColumn<String> collectionId = GeneratedColumn<String>(
+    'collection_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _stationIdMeta = const VerificationMeta(
+    'stationId',
+  );
+  @override
+  late final GeneratedColumn<String> stationId = GeneratedColumn<String>(
+    'station_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _stationPayloadMeta = const VerificationMeta(
+    'stationPayload',
+  );
+  @override
+  late final GeneratedColumn<String> stationPayload = GeneratedColumn<String>(
+    'station_payload',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _addedAtMeta = const VerificationMeta(
+    'addedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> addedAt = GeneratedColumn<DateTime>(
+    'added_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    collectionId,
+    stationId,
+    stationPayload,
+    sortOrder,
+    addedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'collection_members';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CollectionMember> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('collection_id')) {
+      context.handle(
+        _collectionIdMeta,
+        collectionId.isAcceptableOrUnknown(
+          data['collection_id']!,
+          _collectionIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_collectionIdMeta);
+    }
+    if (data.containsKey('station_id')) {
+      context.handle(
+        _stationIdMeta,
+        stationId.isAcceptableOrUnknown(data['station_id']!, _stationIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_stationIdMeta);
+    }
+    if (data.containsKey('station_payload')) {
+      context.handle(
+        _stationPayloadMeta,
+        stationPayload.isAcceptableOrUnknown(
+          data['station_payload']!,
+          _stationPayloadMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_stationPayloadMeta);
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    if (data.containsKey('added_at')) {
+      context.handle(
+        _addedAtMeta,
+        addedAt.isAcceptableOrUnknown(data['added_at']!, _addedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_addedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {collectionId, stationId};
+  @override
+  CollectionMember map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CollectionMember(
+      collectionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}collection_id'],
+      )!,
+      stationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}station_id'],
+      )!,
+      stationPayload: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}station_payload'],
+      )!,
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
+      addedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}added_at'],
+      )!,
+    );
+  }
+
+  @override
+  $CollectionMembersTable createAlias(String alias) {
+    return $CollectionMembersTable(attachedDatabase, alias);
+  }
+}
+
+class CollectionMember extends DataClass
+    implements Insertable<CollectionMember> {
+  final String collectionId;
+  final String stationId;
+  final String stationPayload;
+  final int sortOrder;
+  final DateTime addedAt;
+  const CollectionMember({
+    required this.collectionId,
+    required this.stationId,
+    required this.stationPayload,
+    required this.sortOrder,
+    required this.addedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['collection_id'] = Variable<String>(collectionId);
+    map['station_id'] = Variable<String>(stationId);
+    map['station_payload'] = Variable<String>(stationPayload);
+    map['sort_order'] = Variable<int>(sortOrder);
+    map['added_at'] = Variable<DateTime>(addedAt);
+    return map;
+  }
+
+  CollectionMembersCompanion toCompanion(bool nullToAbsent) {
+    return CollectionMembersCompanion(
+      collectionId: Value(collectionId),
+      stationId: Value(stationId),
+      stationPayload: Value(stationPayload),
+      sortOrder: Value(sortOrder),
+      addedAt: Value(addedAt),
+    );
+  }
+
+  factory CollectionMember.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CollectionMember(
+      collectionId: serializer.fromJson<String>(json['collectionId']),
+      stationId: serializer.fromJson<String>(json['stationId']),
+      stationPayload: serializer.fromJson<String>(json['stationPayload']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      addedAt: serializer.fromJson<DateTime>(json['addedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'collectionId': serializer.toJson<String>(collectionId),
+      'stationId': serializer.toJson<String>(stationId),
+      'stationPayload': serializer.toJson<String>(stationPayload),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+      'addedAt': serializer.toJson<DateTime>(addedAt),
+    };
+  }
+
+  CollectionMember copyWith({
+    String? collectionId,
+    String? stationId,
+    String? stationPayload,
+    int? sortOrder,
+    DateTime? addedAt,
+  }) => CollectionMember(
+    collectionId: collectionId ?? this.collectionId,
+    stationId: stationId ?? this.stationId,
+    stationPayload: stationPayload ?? this.stationPayload,
+    sortOrder: sortOrder ?? this.sortOrder,
+    addedAt: addedAt ?? this.addedAt,
+  );
+  CollectionMember copyWithCompanion(CollectionMembersCompanion data) {
+    return CollectionMember(
+      collectionId: data.collectionId.present
+          ? data.collectionId.value
+          : this.collectionId,
+      stationId: data.stationId.present ? data.stationId.value : this.stationId,
+      stationPayload: data.stationPayload.present
+          ? data.stationPayload.value
+          : this.stationPayload,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      addedAt: data.addedAt.present ? data.addedAt.value : this.addedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CollectionMember(')
+          ..write('collectionId: $collectionId, ')
+          ..write('stationId: $stationId, ')
+          ..write('stationPayload: $stationPayload, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('addedAt: $addedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(collectionId, stationId, stationPayload, sortOrder, addedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CollectionMember &&
+          other.collectionId == this.collectionId &&
+          other.stationId == this.stationId &&
+          other.stationPayload == this.stationPayload &&
+          other.sortOrder == this.sortOrder &&
+          other.addedAt == this.addedAt);
+}
+
+class CollectionMembersCompanion extends UpdateCompanion<CollectionMember> {
+  final Value<String> collectionId;
+  final Value<String> stationId;
+  final Value<String> stationPayload;
+  final Value<int> sortOrder;
+  final Value<DateTime> addedAt;
+  final Value<int> rowid;
+  const CollectionMembersCompanion({
+    this.collectionId = const Value.absent(),
+    this.stationId = const Value.absent(),
+    this.stationPayload = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.addedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CollectionMembersCompanion.insert({
+    required String collectionId,
+    required String stationId,
+    required String stationPayload,
+    this.sortOrder = const Value.absent(),
+    required DateTime addedAt,
+    this.rowid = const Value.absent(),
+  }) : collectionId = Value(collectionId),
+       stationId = Value(stationId),
+       stationPayload = Value(stationPayload),
+       addedAt = Value(addedAt);
+  static Insertable<CollectionMember> custom({
+    Expression<String>? collectionId,
+    Expression<String>? stationId,
+    Expression<String>? stationPayload,
+    Expression<int>? sortOrder,
+    Expression<DateTime>? addedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (collectionId != null) 'collection_id': collectionId,
+      if (stationId != null) 'station_id': stationId,
+      if (stationPayload != null) 'station_payload': stationPayload,
+      if (sortOrder != null) 'sort_order': sortOrder,
+      if (addedAt != null) 'added_at': addedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CollectionMembersCompanion copyWith({
+    Value<String>? collectionId,
+    Value<String>? stationId,
+    Value<String>? stationPayload,
+    Value<int>? sortOrder,
+    Value<DateTime>? addedAt,
+    Value<int>? rowid,
+  }) {
+    return CollectionMembersCompanion(
+      collectionId: collectionId ?? this.collectionId,
+      stationId: stationId ?? this.stationId,
+      stationPayload: stationPayload ?? this.stationPayload,
+      sortOrder: sortOrder ?? this.sortOrder,
+      addedAt: addedAt ?? this.addedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (collectionId.present) {
+      map['collection_id'] = Variable<String>(collectionId.value);
+    }
+    if (stationId.present) {
+      map['station_id'] = Variable<String>(stationId.value);
+    }
+    if (stationPayload.present) {
+      map['station_payload'] = Variable<String>(stationPayload.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    if (addedAt.present) {
+      map['added_at'] = Variable<DateTime>(addedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CollectionMembersCompanion(')
+          ..write('collectionId: $collectionId, ')
+          ..write('stationId: $stationId, ')
+          ..write('stationPayload: $stationPayload, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('addedAt: $addedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -1565,6 +2249,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $HistoryItemsTable historyItems = $HistoryItemsTable(this);
   late final $RecordingItemsTable recordingItems = $RecordingItemsTable(this);
   late final $BrokenReportsTable brokenReports = $BrokenReportsTable(this);
+  late final $StationCollectionsTable stationCollections =
+      $StationCollectionsTable(this);
+  late final $CollectionMembersTable collectionMembers =
+      $CollectionMembersTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -1574,6 +2262,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     historyItems,
     recordingItems,
     brokenReports,
+    stationCollections,
+    collectionMembers,
   ];
 }
 
@@ -2415,6 +3105,417 @@ typedef $$BrokenReportsTableProcessedTableManager =
       BrokenReport,
       PrefetchHooks Function()
     >;
+typedef $$StationCollectionsTableCreateCompanionBuilder =
+    StationCollectionsCompanion Function({
+      required String id,
+      required String name,
+      Value<int> sortOrder,
+      required DateTime createdAt,
+      Value<int> rowid,
+    });
+typedef $$StationCollectionsTableUpdateCompanionBuilder =
+    StationCollectionsCompanion Function({
+      Value<String> id,
+      Value<String> name,
+      Value<int> sortOrder,
+      Value<DateTime> createdAt,
+      Value<int> rowid,
+    });
+
+class $$StationCollectionsTableFilterComposer
+    extends Composer<_$AppDatabase, $StationCollectionsTable> {
+  $$StationCollectionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$StationCollectionsTableOrderingComposer
+    extends Composer<_$AppDatabase, $StationCollectionsTable> {
+  $$StationCollectionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$StationCollectionsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $StationCollectionsTable> {
+  $$StationCollectionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$StationCollectionsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $StationCollectionsTable,
+          StationCollection,
+          $$StationCollectionsTableFilterComposer,
+          $$StationCollectionsTableOrderingComposer,
+          $$StationCollectionsTableAnnotationComposer,
+          $$StationCollectionsTableCreateCompanionBuilder,
+          $$StationCollectionsTableUpdateCompanionBuilder,
+          (
+            StationCollection,
+            BaseReferences<
+              _$AppDatabase,
+              $StationCollectionsTable,
+              StationCollection
+            >,
+          ),
+          StationCollection,
+          PrefetchHooks Function()
+        > {
+  $$StationCollectionsTableTableManager(
+    _$AppDatabase db,
+    $StationCollectionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$StationCollectionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$StationCollectionsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$StationCollectionsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StationCollectionsCompanion(
+                id: id,
+                name: name,
+                sortOrder: sortOrder,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String name,
+                Value<int> sortOrder = const Value.absent(),
+                required DateTime createdAt,
+                Value<int> rowid = const Value.absent(),
+              }) => StationCollectionsCompanion.insert(
+                id: id,
+                name: name,
+                sortOrder: sortOrder,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$StationCollectionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $StationCollectionsTable,
+      StationCollection,
+      $$StationCollectionsTableFilterComposer,
+      $$StationCollectionsTableOrderingComposer,
+      $$StationCollectionsTableAnnotationComposer,
+      $$StationCollectionsTableCreateCompanionBuilder,
+      $$StationCollectionsTableUpdateCompanionBuilder,
+      (
+        StationCollection,
+        BaseReferences<
+          _$AppDatabase,
+          $StationCollectionsTable,
+          StationCollection
+        >,
+      ),
+      StationCollection,
+      PrefetchHooks Function()
+    >;
+typedef $$CollectionMembersTableCreateCompanionBuilder =
+    CollectionMembersCompanion Function({
+      required String collectionId,
+      required String stationId,
+      required String stationPayload,
+      Value<int> sortOrder,
+      required DateTime addedAt,
+      Value<int> rowid,
+    });
+typedef $$CollectionMembersTableUpdateCompanionBuilder =
+    CollectionMembersCompanion Function({
+      Value<String> collectionId,
+      Value<String> stationId,
+      Value<String> stationPayload,
+      Value<int> sortOrder,
+      Value<DateTime> addedAt,
+      Value<int> rowid,
+    });
+
+class $$CollectionMembersTableFilterComposer
+    extends Composer<_$AppDatabase, $CollectionMembersTable> {
+  $$CollectionMembersTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get collectionId => $composableBuilder(
+    column: $table.collectionId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get stationId => $composableBuilder(
+    column: $table.stationId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get stationPayload => $composableBuilder(
+    column: $table.stationPayload,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get addedAt => $composableBuilder(
+    column: $table.addedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$CollectionMembersTableOrderingComposer
+    extends Composer<_$AppDatabase, $CollectionMembersTable> {
+  $$CollectionMembersTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get collectionId => $composableBuilder(
+    column: $table.collectionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get stationId => $composableBuilder(
+    column: $table.stationId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get stationPayload => $composableBuilder(
+    column: $table.stationPayload,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get addedAt => $composableBuilder(
+    column: $table.addedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$CollectionMembersTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CollectionMembersTable> {
+  $$CollectionMembersTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get collectionId => $composableBuilder(
+    column: $table.collectionId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get stationId =>
+      $composableBuilder(column: $table.stationId, builder: (column) => column);
+
+  GeneratedColumn<String> get stationPayload => $composableBuilder(
+    column: $table.stationPayload,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get addedAt =>
+      $composableBuilder(column: $table.addedAt, builder: (column) => column);
+}
+
+class $$CollectionMembersTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CollectionMembersTable,
+          CollectionMember,
+          $$CollectionMembersTableFilterComposer,
+          $$CollectionMembersTableOrderingComposer,
+          $$CollectionMembersTableAnnotationComposer,
+          $$CollectionMembersTableCreateCompanionBuilder,
+          $$CollectionMembersTableUpdateCompanionBuilder,
+          (
+            CollectionMember,
+            BaseReferences<
+              _$AppDatabase,
+              $CollectionMembersTable,
+              CollectionMember
+            >,
+          ),
+          CollectionMember,
+          PrefetchHooks Function()
+        > {
+  $$CollectionMembersTableTableManager(
+    _$AppDatabase db,
+    $CollectionMembersTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CollectionMembersTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CollectionMembersTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CollectionMembersTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> collectionId = const Value.absent(),
+                Value<String> stationId = const Value.absent(),
+                Value<String> stationPayload = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<DateTime> addedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CollectionMembersCompanion(
+                collectionId: collectionId,
+                stationId: stationId,
+                stationPayload: stationPayload,
+                sortOrder: sortOrder,
+                addedAt: addedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String collectionId,
+                required String stationId,
+                required String stationPayload,
+                Value<int> sortOrder = const Value.absent(),
+                required DateTime addedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => CollectionMembersCompanion.insert(
+                collectionId: collectionId,
+                stationId: stationId,
+                stationPayload: stationPayload,
+                sortOrder: sortOrder,
+                addedAt: addedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$CollectionMembersTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CollectionMembersTable,
+      CollectionMember,
+      $$CollectionMembersTableFilterComposer,
+      $$CollectionMembersTableOrderingComposer,
+      $$CollectionMembersTableAnnotationComposer,
+      $$CollectionMembersTableCreateCompanionBuilder,
+      $$CollectionMembersTableUpdateCompanionBuilder,
+      (
+        CollectionMember,
+        BaseReferences<
+          _$AppDatabase,
+          $CollectionMembersTable,
+          CollectionMember
+        >,
+      ),
+      CollectionMember,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -2427,4 +3528,8 @@ class $AppDatabaseManager {
       $$RecordingItemsTableTableManager(_db, _db.recordingItems);
   $$BrokenReportsTableTableManager get brokenReports =>
       $$BrokenReportsTableTableManager(_db, _db.brokenReports);
+  $$StationCollectionsTableTableManager get stationCollections =>
+      $$StationCollectionsTableTableManager(_db, _db.stationCollections);
+  $$CollectionMembersTableTableManager get collectionMembers =>
+      $$CollectionMembersTableTableManager(_db, _db.collectionMembers);
 }

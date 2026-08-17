@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:ffmpeg_kit_flutter_new_audio/ffmpeg_kit.dart';
-import 'package:ffmpeg_kit_flutter_new_audio/ffmpeg_session.dart';
-import 'package:ffmpeg_kit_flutter_new_audio/ffprobe_kit.dart';
+import 'package:ffmpeg_kit_flutter_new_full/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter_new_full/ffmpeg_session.dart';
+import 'package:ffmpeg_kit_flutter_new_full/ffprobe_kit.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:rxdart/rxdart.dart';
@@ -45,6 +45,14 @@ class RecordingService {
   Completer<void>? _finished;
   String? _path;
   RadioStation? _station;
+  String _preferredFormat = 'auto';
+  String? lastDiagnostic;
+
+  void configure({required String preferredFormat}) {
+    _preferredFormat = {'auto', 'mp3', 'm4a'}.contains(preferredFormat)
+        ? preferredFormat
+        : 'auto';
+  }
 
   bool get isRecording => state.value.status == RecordingStatus.recording;
 
@@ -66,7 +74,10 @@ class RecordingService {
     state.add(
       RecordingSnapshot(status: RecordingStatus.starting, station: station),
     );
-    final extension = _extension(stream);
+    final sourceExtension = _extension(stream);
+    final extension = _preferredFormat == 'auto'
+        ? sourceExtension
+        : _preferredFormat;
     final root = await getApplicationDocumentsDirectory();
     final directory = Directory(
       '${root.path}${Platform.pathSeparator}recordings',
@@ -79,13 +90,35 @@ class RecordingService {
     _station = station;
     _startedAt = now;
     _finished = Completer<void>();
+    final codecArguments = extension == sourceExtension
+        ? '-c:a copy'
+        : extension == 'mp3'
+        ? '-c:a libmp3lame -b:a 128k'
+        : '-c:a aac -b:a 128k';
     final command =
-        '-hide_banner -loglevel warning -y -i ${_quote(stream.url)} -map 0:a:0 -c:a copy ${_quote(path)}';
+        '-hide_banner -loglevel warning -y -user_agent ${_quote('Dhwani/1.0 (com.prashant.dhwani)')} '
+        '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 2 '
+        '-i ${_quote(stream.url)} -map 0:a:0 $codecArguments ${_quote(path)}';
     try {
+      lastDiagnostic = null;
       _session = await FFmpegKit.executeAsync(command, (session) async {
         final output = await session.getOutput();
+        lastDiagnostic = output;
         if (!(_finished?.isCompleted ?? true)) _finished!.complete();
         DhwaniLog.recorder('FFmpeg recording session ended: $output');
+        if (state.value.status == RecordingStatus.recording) {
+          _timer?.cancel();
+          _session = null;
+          state.add(
+            RecordingSnapshot(
+              status: RecordingStatus.error,
+              station: station,
+              path: path,
+              elapsed: DateTime.now().difference(now),
+              message: 'The station ended the recording connection.',
+            ),
+          );
+        }
       });
       state.add(
         RecordingSnapshot(
@@ -203,6 +236,33 @@ class RecordingService {
     }
     _reset();
     state.add(const RecordingSnapshot(status: RecordingStatus.idle));
+  }
+
+  Future<int> clearTemporaryFiles() async {
+    final root = await getApplicationDocumentsDirectory();
+    final directory = Directory(
+      '${root.path}${Platform.pathSeparator}recordings',
+    );
+    if (!await directory.exists()) return 0;
+    final indexed = (await database.allRecordings())
+        .map((entry) => entry.path)
+        .toSet();
+    var removed = 0;
+    await for (final entity in directory.list()) {
+      if (entity is File && !indexed.contains(entity.path)) {
+        await entity.delete();
+        removed++;
+      }
+    }
+    return removed;
+  }
+
+  Future<void> deleteAllRecordings() async {
+    for (final entry in await database.allRecordings()) {
+      final file = File(entry.path);
+      if (await file.exists()) await file.delete();
+    }
+    await database.clearRecordings();
   }
 
   static String _extension(StationStream stream) {

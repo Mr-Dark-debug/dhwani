@@ -65,6 +65,28 @@ class SettingsScreen extends ConsumerWidget {
                 settings.copyWith(backgroundPlayback: value),
               ),
             ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Default station scope'),
+              subtitle: const Text('Used by the tuner and Previous / Next'),
+              trailing: DropdownButton<String>(
+                value: settings.defaultScope,
+                items: const [
+                  DropdownMenuItem(value: 'city', child: Text('City')),
+                  DropdownMenuItem(value: 'state', child: Text('State')),
+                  DropdownMenuItem(value: 'country', child: Text('Country')),
+                  DropdownMenuItem(
+                    value: 'worldwide',
+                    child: Text('Worldwide'),
+                  ),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    controller.update(settings.copyWith(defaultScope: value));
+                  }
+                },
+              ),
+            ),
             const _Heading('Network'),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
@@ -80,7 +102,7 @@ class SettingsScreen extends ConsumerWidget {
               contentPadding: EdgeInsets.zero,
               title: const Text('Prefer lower bitrate on mobile'),
               subtitle: const Text(
-                'Used only when a station exposes real alternatives.',
+                'Chooses a real lower-bitrate alternative on mobile; Wi-Fi keeps the best-ranked stream.',
               ),
               value: settings.preferLowerBitrate,
               onChanged: (value) => controller.update(
@@ -88,6 +110,35 @@ class SettingsScreen extends ConsumerWidget {
               ),
             ),
             const _Heading('Recording'),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Default recording format'),
+              subtitle: const Text(
+                'Original avoids quality loss; MP3/M4A transcode only when required.',
+              ),
+              trailing: DropdownButton<String>(
+                value: settings.recordingFormat,
+                items: const [
+                  DropdownMenuItem(value: 'auto', child: Text('Original')),
+                  DropdownMenuItem(value: 'mp3', child: Text('MP3')),
+                  DropdownMenuItem(value: 'm4a', child: Text('M4A')),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    controller.update(
+                      settings.copyWith(recordingFormat: value),
+                    );
+                  }
+                },
+              ),
+            ),
+            const ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text('Default recording directory'),
+              subtitle: Text(
+                'Private app storage. Use Export / Save to Downloads to choose a public location.',
+              ),
+            ),
             ListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Scheduled recordings'),
@@ -119,12 +170,51 @@ class SettingsScreen extends ConsumerWidget {
             ),
             ListTile(
               contentPadding: EdgeInsets.zero,
+              title: const Text('Clear recent searches'),
+              onTap: () async {
+                await ref.read(preferencesProvider).remove('recentSearches');
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Recent searches cleared.')),
+                  );
+                }
+              },
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
               title: const Text('Refresh catalogue cache'),
               onTap: () async {
                 await ref.read(catalogueRepositoryProvider).refresh();
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Catalogue refreshed.')),
+                  );
+                }
+              },
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Clear catalogue cache'),
+              subtitle: const Text('Keeps favourites and custom stations'),
+              onTap: () async {
+                await ref.read(databaseProvider).clearCatalogueCache();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Catalogue cache cleared.')),
+                  );
+                }
+              },
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Clear recording temp files'),
+              onTap: () async {
+                final count = await ref
+                    .read(recordingServiceProvider)
+                    .clearTemporaryFiles();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('$count temporary files removed.')),
                   );
                 }
               },
@@ -171,7 +261,11 @@ class SettingsScreen extends ConsumerWidget {
   }
 
   Future<void> _export(BuildContext context, WidgetRef ref) async {
-    final data = await ref.read(databaseProvider).exportUserData();
+    final decoded =
+        jsonDecode(await ref.read(databaseProvider).exportUserData())
+            as Map<String, Object?>;
+    decoded['settings'] = ref.read(settingsProvider).toJson();
+    final data = const JsonEncoder.withIndent('  ').convert(decoded);
     await SharePlus.instance.share(
       ShareParams(
         files: [
@@ -214,6 +308,52 @@ class SettingsScreen extends ConsumerWidget {
         if (item['favourite'] == true) {
           await ref.read(databaseProvider).setFavourite(station, true);
         }
+      }
+      for (final item
+          in (decoded['history'] as List? ?? const []).whereType<Map>()) {
+        final stationJson = item['station'];
+        final playedAt = DateTime.tryParse('${item['playedAt'] ?? ''}');
+        if (stationJson is! Map || playedAt == null) continue;
+        final station = RadioStation.fromJson(
+          stationJson.cast<String, Object?>(),
+        );
+        await ref
+            .read(databaseProvider)
+            .importHistory(
+              station,
+              playedAt,
+              duration: Duration(
+                seconds: (item['durationSeconds'] as num?)?.toInt() ?? 0,
+              ),
+            );
+      }
+      for (final item
+          in (decoded['collections'] as List? ?? const []).whereType<Map>()) {
+        final id = '${item['id'] ?? ''}'.trim();
+        final name = '${item['name'] ?? ''}'.trim();
+        if (id.isEmpty || name.isEmpty) continue;
+        await ref.read(databaseProvider).createCollection(id, name);
+        for (final stationJson in (item['stations'] as List? ?? const [])) {
+          if (stationJson is! Map) continue;
+          final station = RadioStation.fromJson(
+            stationJson.cast<String, Object?>(),
+          );
+          if (station.id.isNotEmpty) {
+            await ref.read(databaseProvider).addToCollection(id, station);
+          }
+        }
+      }
+      final settingsJson = decoded['settings'];
+      if (settingsJson is Map) {
+        final current = ref.read(settingsProvider);
+        await ref
+            .read(settingsProvider.notifier)
+            .update(
+              DhwaniSettings.fromJson(
+                settingsJson.cast<String, Object?>(),
+                fallback: current,
+              ),
+            );
       }
       if (context.mounted) {
         ScaffoldMessenger.of(
@@ -264,96 +404,171 @@ class _Heading extends StatelessWidget {
   );
 }
 
-class ScheduleScreen extends ConsumerWidget {
+class ScheduleScreen extends ConsumerStatefulWidget {
   const ScheduleScreen({super.key, required this.alarm});
   final bool alarm;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ScheduleScreen> createState() => _ScheduleScreenState();
+}
+
+class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
+  static const _dayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  final repeatWeekdays = <int>{};
+  int recordingMinutes = 30;
+  double alarmVolume = .65;
+
+  @override
+  Widget build(BuildContext context) {
     final station = ref.watch(selectedStationProvider);
+    final alarm = widget.alarm;
     return Scaffold(
       appBar: AppBar(
         title: Text(alarm ? 'Radio Alarm' : 'Scheduled Recording'),
+        actions: [
+          IconButton(
+            tooltip: 'Cancel all reminders',
+            onPressed: () async {
+              await ref.read(notificationServiceProvider).cancelAllReminders();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('All reminders cancelled.')),
+                );
+              }
+            },
+            icon: const Icon(Icons.notifications_off_outlined),
+          ),
+        ],
       ),
       body: SafeArea(
-        child: Padding(
+        child: ListView(
           padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+          children: [
+            Text(
+              alarm ? 'Wake with radio' : 'Prepare a recording',
+              style: Theme.of(context).textTheme.headlineLarge,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              station == null
+                  ? 'Choose a station in the player first.'
+                  : 'Station: ${station.name}',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 20),
+            Text('Repeat', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              children: List.generate(7, (index) {
+                final weekday = index + 1;
+                return FilterChip(
+                  label: Text(_dayLabels[index]),
+                  selected: repeatWeekdays.contains(weekday),
+                  onSelected: (selected) => setState(() {
+                    if (selected) {
+                      repeatWeekdays.add(weekday);
+                    } else {
+                      repeatWeekdays.remove(weekday);
+                    }
+                  }),
+                );
+              }),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              repeatWeekdays.isEmpty ? 'One time' : 'Repeats on selected days',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            if (!alarm) ...[
+              const SizedBox(height: 20),
               Text(
-                alarm ? 'Wake with radio' : 'Prepare a recording',
-                style: Theme.of(context).textTheme.headlineLarge,
+                'Planned duration',
+                style: Theme.of(context).textTheme.titleMedium,
               ),
-              const SizedBox(height: 16),
+              SegmentedButton<int>(
+                segments: const [
+                  ButtonSegment(value: 15, label: Text('15m')),
+                  ButtonSegment(value: 30, label: Text('30m')),
+                  ButtonSegment(value: 60, label: Text('60m')),
+                ],
+                selected: {recordingMinutes},
+                onSelectionChanged: (value) =>
+                    setState(() => recordingMinutes = value.first),
+              ),
+            ] else ...[
+              const SizedBox(height: 20),
               Text(
-                station == null
-                    ? 'Choose a station in the player first.'
-                    : 'Station: ${station.name}',
-                style: Theme.of(context).textTheme.titleLarge,
+                'Prepared player volume',
+                style: Theme.of(context).textTheme.titleMedium,
               ),
-              const SizedBox(height: 16),
-              const Text(
-                'Modern Android may require a notification tap before playback or recording can start. Dhwani uses a visible, policy-compliant reminder instead of promising a silent background launch that the OS may block.',
-              ),
-              const SizedBox(height: 24),
-              FilledButton.icon(
-                onPressed: station == null
-                    ? null
-                    : () async {
-                        final time = await showTimePicker(
-                          context: context,
-                          initialTime: TimeOfDay.now(),
-                        );
-                        if (time != null && context.mounted) {
-                          final now = DateTime.now();
-                          var scheduled = DateTime(
-                            now.year,
-                            now.month,
-                            now.day,
-                            time.hour,
-                            time.minute,
-                          );
-                          if (!scheduled.isAfter(now)) {
-                            scheduled = scheduled.add(const Duration(days: 1));
-                          }
-                          final notifications = ref.read(
-                            notificationServiceProvider,
-                          );
-                          final permission = await notifications
-                              .requestPermission();
-                          if (!permission) {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Notification permission is required for reminders.',
-                                  ),
-                                ),
-                              );
-                            }
-                            return;
-                          }
-                          await notifications.scheduleReminder(
-                            station: station,
-                            at: scheduled,
-                            alarm: alarm,
-                          );
-                          if (!context.mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                '${alarm ? 'Alarm' : 'Recording reminder'} scheduled for ${time.format(context)}.',
-                              ),
-                            ),
-                          );
-                        }
-                      },
-                icon: Icon(alarm ? Icons.alarm_add : Icons.event_available),
-                label: Text(alarm ? 'Set alarm reminder' : 'Schedule reminder'),
+              Slider(
+                value: alarmVolume,
+                divisions: 10,
+                label: '${(alarmVolume * 100).round()}%',
+                onChanged: (value) => setState(() => alarmVolume = value),
               ),
             ],
+            const SizedBox(height: 20),
+            const Text(
+              'Android delivers a visible reminder. Tap it to open the prepared station action. This avoids promising a silent background launch that battery policy or foreground-service rules may block.',
+            ),
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: station == null ? null : () => _schedule(station),
+              icon: Icon(alarm ? Icons.alarm_add : Icons.event_available),
+              label: Text(alarm ? 'Set alarm reminder' : 'Schedule reminder'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _schedule(RadioStation station) async {
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+    );
+    if (time == null || !mounted) return;
+    final now = DateTime.now();
+    var scheduled = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      time.hour,
+      time.minute,
+    );
+    if (!scheduled.isAfter(now)) {
+      scheduled = scheduled.add(const Duration(days: 1));
+    }
+    final notifications = ref.read(notificationServiceProvider);
+    final permission = await notifications.requestPermission();
+    if (!permission) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Notification permission is required for reminders.'),
           ),
+        );
+      }
+      return;
+    }
+    await notifications.scheduleReminder(
+      station: station,
+      at: scheduled,
+      alarm: widget.alarm,
+      repeatWeekdays: repeatWeekdays,
+      recordingDuration: widget.alarm
+          ? null
+          : Duration(minutes: recordingMinutes),
+      preparedVolume: widget.alarm ? alarmVolume : null,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '${widget.alarm ? 'Alarm' : 'Recording'} reminder scheduled for ${time.format(context)}${repeatWeekdays.isEmpty ? '' : ' on ${repeatWeekdays.length} selected day(s)'}.',
         ),
       ),
     );
