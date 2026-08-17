@@ -12,8 +12,10 @@ import '../../app/theme/dhwani_theme.dart';
 import '../../core/audio/dhwani_audio_handler.dart';
 import '../../core/recording/recording_service.dart';
 import '../../core/settings/settings_controller.dart';
+import '../../core/widgets/dhwani_dropdown.dart';
 import '../../core/widgets/dhwani_shell.dart';
 import '../../data/models/radio_station.dart';
+import 'sleep_timer_sheet.dart';
 
 class PlayerScreen extends ConsumerStatefulWidget {
   const PlayerScreen({super.key});
@@ -570,127 +572,43 @@ class _BandMenu extends ConsumerWidget {
     null => Icons.tune_rounded,
   };
 
-  String _bandLabel(RadioBand? band) => switch (band) {
-    RadioBand.fm => 'FM Radio',
-    RadioBand.am => 'AM Radio',
-    RadioBand.net => 'Internet (NET)',
-    null => 'All Bands',
-  };
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final selected = ref.watch(bandFilterProvider);
     final displayLabel = selected?.name.toUpperCase() ?? station.bandLabel;
     final currentIcon = _bandIcon(selected ?? station.band);
 
-    return PopupMenuButton<RadioBand?>(
+    return DhwaniDropdown<RadioBand?>(
       tooltip: 'Filter by source / band',
-      initialValue: selected,
+      value: selected,
+      label: displayLabel,
+      icon: currentIcon,
       onSelected: (value) {
         HapticFeedback.selectionClick();
         ref.read(bandFilterProvider.notifier).set(value);
       },
-      elevation: 6,
-      shadowColor: Colors.black.withValues(alpha: .35),
-      color:
-          Theme.of(context).cardTheme.color ??
-          Theme.of(context).colorScheme.surface,
-      surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: BorderSide(
-          color: Theme.of(context).colorScheme.outline.withValues(alpha: .4),
+      items: const [
+        DhwaniDropdownItem(
+          value: null,
+          label: 'All Bands',
+          icon: Icons.tune_rounded,
         ),
-      ),
-      position: PopupMenuPosition.under,
-      offset: const Offset(0, 8),
-      itemBuilder: (context) => [
-        _buildMenuItem(context, null, selected == null),
-        _buildMenuItem(context, RadioBand.fm, selected == RadioBand.fm),
-        _buildMenuItem(context, RadioBand.am, selected == RadioBand.am),
-        _buildMenuItem(context, RadioBand.net, selected == RadioBand.net),
+        DhwaniDropdownItem(
+          value: RadioBand.fm,
+          label: 'FM Radio',
+          icon: Icons.radio_rounded,
+        ),
+        DhwaniDropdownItem(
+          value: RadioBand.am,
+          label: 'AM Radio',
+          icon: Icons.sensors_rounded,
+        ),
+        DhwaniDropdownItem(
+          value: RadioBand.net,
+          label: 'Internet (NET)',
+          icon: Icons.wifi_rounded,
+        ),
       ],
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .08),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color:
-                Theme.of(context).colorScheme.onSurface.withValues(alpha: .08),
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              currentIcon,
-              size: 16,
-              color: selected != null
-                  ? DhwaniColors.signal
-                  : Theme.of(context).colorScheme.onSurface,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              displayLabel,
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurface,
-                fontWeight: FontWeight.w800,
-                fontSize: 13,
-                letterSpacing: .4,
-              ),
-            ),
-            const SizedBox(width: 4),
-            Icon(
-              Icons.keyboard_arrow_down_rounded,
-              size: 18,
-              color:
-                  Theme.of(context).colorScheme.onSurface.withValues(alpha: .6),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  PopupMenuItem<RadioBand?> _buildMenuItem(
-    BuildContext context,
-    RadioBand? band,
-    bool isSelected,
-  ) {
-    return PopupMenuItem<RadioBand?>(
-      value: band,
-      height: 46,
-      child: Row(
-        children: [
-          Icon(
-            _bandIcon(band),
-            size: 20,
-            color: isSelected
-                ? DhwaniColors.signal
-                : Theme.of(context).colorScheme.onSurface.withValues(alpha: .7),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              _bandLabel(band),
-              style: TextStyle(
-                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
-                fontSize: 14,
-                color: isSelected
-                    ? DhwaniColors.signal
-                    : Theme.of(context).colorScheme.onSurface,
-              ),
-            ),
-          ),
-          if (isSelected)
-            const Icon(
-              Icons.check_rounded,
-              size: 18,
-              color: DhwaniColors.signal,
-            ),
-        ],
-      ),
     );
   }
 }
@@ -1362,126 +1280,7 @@ void showStationInfo(
 }
 
 void _showSleepTimer(BuildContext context, WidgetRef ref) {
-  showModalBottomSheet<void>(
-    context: context,
-    showDragHandle: true,
-    builder: (context) => SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Sleep timer',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [15, 30, 45, 60, 90]
-                  .map(
-                    (minutes) => ActionChip(
-                      label: Text('$minutes min'),
-                      onPressed: () {
-                        ref
-                            .read(sleepTimerProvider.notifier)
-                            .start(Duration(minutes: minutes));
-                        Navigator.pop(context);
-                      },
-                    ),
-                  )
-                  .toList(),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () async {
-                      final controller = TextEditingController();
-                      final minutes = await showDialog<int>(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text('Custom sleep timer'),
-                          content: TextField(
-                            controller: controller,
-                            autofocus: true,
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(
-                              labelText: 'Minutes',
-                            ),
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context),
-                              child: const Text('Cancel'),
-                            ),
-                            FilledButton(
-                              onPressed: () => Navigator.pop(
-                                context,
-                                int.tryParse(controller.text),
-                              ),
-                              child: const Text('Set'),
-                            ),
-                          ],
-                        ),
-                      );
-                      controller.dispose();
-                      if (minutes == null || minutes <= 0) return;
-                      ref
-                          .read(sleepTimerProvider.notifier)
-                          .start(Duration(minutes: minutes));
-                      if (context.mounted) Navigator.pop(context);
-                    },
-                    child: const Text('Custom'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () async {
-                      final now = DateTime.now();
-                      final time = await showTimePicker(
-                        context: context,
-                        initialTime: TimeOfDay.fromDateTime(
-                          now.add(const Duration(minutes: 30)),
-                        ),
-                      );
-                      if (time == null) return;
-                      var end = DateTime(
-                        now.year,
-                        now.month,
-                        now.day,
-                        time.hour,
-                        time.minute,
-                      );
-                      if (!end.isAfter(now)) {
-                        end = end.add(const Duration(days: 1));
-                      }
-                      ref
-                          .read(sleepTimerProvider.notifier)
-                          .start(end.difference(now));
-                      if (context.mounted) Navigator.pop(context);
-                    },
-                    child: const Text('End at…'),
-                  ),
-                ),
-              ],
-            ),
-            TextButton(
-              onPressed: () {
-                ref.read(sleepTimerProvider.notifier).cancel();
-                Navigator.pop(context);
-              },
-              child: const Text('Cancel active timer'),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
+  SleepTimerSheet.show(context);
 }
 
 void _showVolume(BuildContext context, WidgetRef ref) {

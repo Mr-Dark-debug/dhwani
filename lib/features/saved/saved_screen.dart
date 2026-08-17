@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../app/providers.dart';
 import '../../core/persistence/app_database.dart';
+import '../../core/widgets/dhwani_dropdown.dart';
 import '../../core/widgets/dhwani_shell.dart';
 import '../../data/models/radio_station.dart';
 import 'package:uuid/uuid.dart';
@@ -166,22 +167,27 @@ class _FavouriteListState extends ConsumerState<_FavouriteList> {
                   onChanged: (value) => setState(() => query = value.trim()),
                 ),
               ),
-              PopupMenuButton<_FavouriteSort>(
+              DhwaniDropdown<_FavouriteSort>(
                 tooltip: 'Sort favourites',
-                initialValue: sort,
+                value: sort,
+                isPill: false,
+                icon: Icons.sort_rounded,
                 onSelected: (value) => setState(() => sort = value),
-                itemBuilder: (_) => const [
-                  PopupMenuItem(
+                items: const [
+                  DhwaniDropdownItem(
                     value: _FavouriteSort.custom,
-                    child: Text('Custom order'),
+                    label: 'Custom order',
+                    icon: Icons.reorder_rounded,
                   ),
-                  PopupMenuItem(
+                  DhwaniDropdownItem(
                     value: _FavouriteSort.alphabetical,
-                    child: Text('A–Z'),
+                    label: 'A–Z',
+                    icon: Icons.sort_by_alpha_rounded,
                   ),
-                  PopupMenuItem(
+                  DhwaniDropdownItem(
                     value: _FavouriteSort.frequency,
-                    child: Text('Frequency'),
+                    label: 'Frequency',
+                    icon: Icons.sensors_rounded,
                   ),
                 ],
               ),

@@ -5,9 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/providers.dart';
-import '../../core/widgets/brand_mark.dart';
-import '../../core/widgets/dhwani_shell.dart';
 import '../../core/settings/settings_controller.dart';
+import '../../core/widgets/brand_mark.dart';
+import '../../core/widgets/dhwani_dropdown.dart';
+import '../../core/widgets/dhwani_shell.dart';
 import '../../data/datasources/radio_browser_api.dart';
 import '../../data/models/radio_station.dart';
 
@@ -486,20 +487,30 @@ class _StationListScreenState extends ConsumerState<StationListScreen> {
       appBar: AppBar(
         title: Text(title),
         actions: [
-          PopupMenuButton<StationSortMode>(
+          DhwaniDropdown<StationSortMode>(
             tooltip: 'Sort stations',
-            initialValue: sortMode,
+            value: sortMode,
+            isPill: false,
+            icon: Icons.sort_rounded,
             onSelected: (value) => setState(() => sortMode = value),
-            itemBuilder: (context) => StationSortMode.values
+            items: StationSortMode.values
                 .map(
-                  (value) => CheckedPopupMenuItem(
-                    value: value,
-                    checked: value == sortMode,
-                    child: Text(value.label),
+                  (mode) => DhwaniDropdownItem(
+                    value: mode,
+                    label: mode.label,
+                    icon: switch (mode) {
+                      StationSortMode.recommended => Icons.recommend_rounded,
+                      StationSortMode.frequency => Icons.sensors_rounded,
+                      StationSortMode.popular => Icons.trending_up_rounded,
+                      StationSortMode.alphabetical =>
+                        Icons.sort_by_alpha_rounded,
+                      StationSortMode.bitrate => Icons.speed_rounded,
+                      StationSortMode.recentlyPlayed => Icons.history_rounded,
+                      StationSortMode.savedFirst => Icons.favorite_rounded,
+                    },
                   ),
                 )
                 .toList(),
-            icon: const Icon(Icons.sort_rounded),
           ),
           IconButton(
             tooltip: 'Global search',

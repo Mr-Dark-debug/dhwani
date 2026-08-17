@@ -99,7 +99,7 @@ void main() {
       scrollable: find.byType(Scrollable).last,
     );
     await tester.tap(
-      find.widgetWithText(CheckedPopupMenuItem<StationSortMode>, 'A–Z'),
+      find.widgetWithText(PopupMenuItem<StationSortMode>, 'A–Z'),
     );
     await tester.pumpAndSettle();
     expect(
@@ -216,6 +216,16 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Station info'), findsOneWidget);
       expect(find.text('Sleep timer'), findsOneWidget);
+
+      // Verify opening Sleep timer opens radial SleepTimerSheet
+      await tester.tap(find.text('Sleep timer'));
+      await tester.pumpAndSettle();
+      expect(find.text('Sleep Session'), findsOneWidget);
+      expect(find.text('Start Sleep Timer'), findsOneWidget);
+      expect(find.text('15 m'), findsOneWidget);
+      expect(find.text('30 m'), findsOneWidget);
+      expect(find.text('45 m'), findsOneWidget);
+      expect(find.text('DRAG TO SET'), findsOneWidget);
     },
   );
 
