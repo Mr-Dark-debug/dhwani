@@ -29,6 +29,55 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(playerSnapshotProvider, (previous, next) {
+      final current = next.value;
+      if (current != null &&
+          current.status == DhwaniPlaybackStatus.error &&
+          previous?.value?.status != DhwaniPlaybackStatus.error) {
+        final messenger = ScaffoldMessenger.of(context);
+        messenger.hideCurrentSnackBar();
+        messenger.showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            content: Row(
+              children: [
+                const Icon(
+                  Icons.error_outline_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    current.message ?? 'Station isn’t responding.',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            action: SnackBarAction(
+              label: 'Next',
+              textColor: Colors.white,
+              onPressed: () async {
+                await ref.read(audioHandlerProvider).skipToNext();
+                final curr = ref.read(audioHandlerProvider).currentStation;
+                if (curr != null) {
+                  ref.read(selectedStationProvider.notifier).select(curr);
+                }
+              },
+            ),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    });
+
     final all = ref.watch(stationsProvider).value ?? const <RadioStation>[];
     var station = ref.watch(selectedStationProvider);
     if (!_restored && station == null && all.isNotEmpty) {
@@ -422,17 +471,6 @@ class _PlayerContent extends ConsumerWidget {
             ),
           ),
         ),
-        if (snapshot.status == DhwaniPlaybackStatus.error) ...[
-          const SizedBox(height: 12),
-          Text(
-            snapshot.message ?? 'Station isn’t responding.',
-            textAlign: TextAlign.center,
-          ),
-          TextButton(
-            onPressed: () => ref.read(audioHandlerProvider).skipToNext(),
-            child: const Text('Try next station'),
-          ),
-        ],
       ],
     );
   }

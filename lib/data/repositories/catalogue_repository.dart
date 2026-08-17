@@ -21,7 +21,12 @@ class CatalogueRepository {
 
   Future<void> bootstrap() async {
     final cached = await database.allStations();
-    if (cached.isEmpty) await database.upsertStations(_offlineSeeds);
+    if (cached.isEmpty) {
+      await database.upsertStations(_offlineSeeds);
+    } else {
+      final merged = _merge([..._offlineSeeds, ...cached]);
+      await database.upsertStations(merged);
+    }
     await refresh();
   }
 
@@ -46,6 +51,7 @@ class CatalogueRepository {
       }),
     ]);
     final merged = _merge([
+      ..._offlineSeeds,
       ...cached,
       ...results.expand((stations) => stations),
     ]);
@@ -122,15 +128,32 @@ class CatalogueRepository {
       final semanticKey = station.isDarbhanga
           ? 'akashvani-darbhanga'
           : station.id;
+      final filteredStationStreams = station.streams
+          .where((s) => !s.url.contains('wavespb.com'))
+          .toList();
       final previous = result[semanticKey];
       if (previous == null) {
-        result[semanticKey] = station;
+        result[semanticKey] = station.copyWith(
+          streams: filteredStationStreams.isNotEmpty
+              ? filteredStationStreams
+              : station.streams,
+        );
       } else {
+        final previousFiltered = previous.streams
+            .where((s) => !s.url.contains('wavespb.com'))
+            .toList();
         final urls = <String, StationStream>{
-          for (final stream in [...previous.streams, ...station.streams])
+          for (final stream in [
+            ...filteredStationStreams,
+            ...previousFiltered,
+          ])
             stream.url: stream,
         };
-        result[semanticKey] = previous.copyWith(streams: urls.values.toList());
+        result[semanticKey] = previous.copyWith(
+          streams: urls.values.isNotEmpty
+              ? urls.values.toList()
+              : previous.streams,
+        );
       }
     }
     return result.values.toList();
@@ -150,7 +173,7 @@ class CatalogueRepository {
       streams: [
         StationStream(
           url:
-              'https://radio.wavespb.com/live/8e074285599ed45d/8e074285599ed45d.m3u8',
+              'https://airhlspush.pc.cdn.bitgravity.com/httppush/hlspbaudio160/hlspbaudio160_Auto.m3u8',
           hls: true,
         ),
         StationStream(
