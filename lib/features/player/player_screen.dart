@@ -14,6 +14,7 @@ import '../../core/recording/recording_service.dart';
 import '../../core/settings/settings_controller.dart';
 import '../../core/widgets/dhwani_dropdown.dart';
 import '../../core/widgets/dhwani_shell.dart';
+import '../../core/updater/app_update_sheet.dart';
 import '../../data/models/radio_station.dart';
 import 'sleep_timer_sheet.dart';
 
@@ -26,6 +27,26 @@ class PlayerScreen extends ConsumerStatefulWidget {
 
 class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   bool _restored = false;
+  bool _updateChecked = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!_updateChecked && mounted) {
+        _updateChecked = true;
+        final updater = ref.read(appUpdateServiceProvider);
+        final release = await updater.checkForUpdate();
+        if (release != null && mounted) {
+          AppUpdateSheet.show(
+            context,
+            release: release,
+            updateService: updater,
+          );
+        }
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

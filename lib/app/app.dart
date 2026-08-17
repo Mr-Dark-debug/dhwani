@@ -40,22 +40,22 @@ class _DhwaniAppState extends ConsumerState<DhwaniApp>
   Widget build(BuildContext context) {
     ref.watch(bootstrapProvider);
     final settings = ref.watch(settingsProvider);
-    ref
-        .read(audioHandlerProvider)
-        .configureNetworkPolicy(
-          wifiOnly: settings.wifiOnly,
-          preferLowerBitrate: settings.preferLowerBitrate,
-          autoReconnect: settings.autoReconnect,
-        );
-    ref
-        .read(recordingServiceProvider)
-        .configure(preferredFormat: settings.recordingFormat);
-    ref
-        .read(audioHandlerProvider)
-        .configureEqualizer(
-          settings.equalizerPreset,
-          customGains: settings.equalizerGains,
-        );
+
+    ref.listen(settingsProvider, (previous, next) {
+      ref.read(audioHandlerProvider).configureNetworkPolicy(
+            wifiOnly: next.wifiOnly,
+            preferLowerBitrate: next.preferLowerBitrate,
+            autoReconnect: next.autoReconnect,
+          );
+      ref
+          .read(recordingServiceProvider)
+          .configure(preferredFormat: next.recordingFormat);
+      ref.read(audioHandlerProvider).configureEqualizer(
+            next.equalizerPreset,
+            customGains: next.equalizerGains,
+          );
+    });
+
     final router = ref.watch(routerProvider);
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,
@@ -64,13 +64,6 @@ class _DhwaniAppState extends ConsumerState<DhwaniApp>
       darkTheme: DhwaniTheme.dark(),
       themeMode: settings.themeMode,
       routerConfig: router,
-      builder: (context, child) => MediaQuery(
-        data: MediaQuery.of(context).copyWith(
-          disableAnimations:
-              settings.reducedMotion || MediaQuery.disableAnimationsOf(context),
-        ),
-        child: child ?? const SizedBox.shrink(),
-      ),
     );
   }
 }

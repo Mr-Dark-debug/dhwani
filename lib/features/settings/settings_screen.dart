@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../app/providers.dart';
 import '../../core/settings/settings_controller.dart';
+import '../../core/updater/app_update_sheet.dart';
 import '../../core/widgets/brand_mark.dart';
 import '../../data/models/radio_station.dart';
 
@@ -240,9 +241,40 @@ class SettingsScreen extends ConsumerWidget {
               leading: const BrandMark(size: 42),
               title: const Text('Dhwani'),
               subtitle: const Text(
-                'Version 1.0.0 · Real radio from your city and the world.',
+                'Version 1.1.0 · Real radio from your city and the world.',
               ),
               onTap: () => _about(context),
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.system_update_rounded),
+              title: const Text('Check for updates'),
+              subtitle: const Text('Check GitHub Releases for new version'),
+              onTap: () async {
+                final messenger = ScaffoldMessenger.of(context);
+                messenger.showSnackBar(
+                  const SnackBar(
+                    content: Text('Checking for updates…'),
+                    duration: Duration(seconds: 1),
+                  ),
+                );
+                final updater = ref.read(appUpdateServiceProvider);
+                final release = await updater.checkForUpdate();
+                if (!context.mounted) return;
+                if (release != null) {
+                  AppUpdateSheet.show(
+                    context,
+                    release: release,
+                    updateService: updater,
+                  );
+                } else {
+                  messenger.showSnackBar(
+                    const SnackBar(
+                      content: Text('You are on the latest version of Dhwani!'),
+                    ),
+                  );
+                }
+              },
             ),
             ListTile(
               contentPadding: EdgeInsets.zero,
@@ -250,7 +282,7 @@ class SettingsScreen extends ConsumerWidget {
               onTap: () => showLicensePage(
                 context: context,
                 applicationName: 'Dhwani',
-                applicationVersion: '1.0.0',
+                applicationVersion: '1.1.0',
                 applicationIcon: const BrandMark(size: 52),
               ),
             ),

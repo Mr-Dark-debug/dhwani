@@ -45,6 +45,54 @@ class MainActivity : AudioServiceActivity() {
                     exportRequestCode,
                 )
             }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.prashant.dhwani/installer")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "canRequestPackageInstalls" -> {
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                            result.success(packageManager.canRequestPackageInstalls())
+                        } else {
+                            result.success(true)
+                        }
+                    }
+                    "openInstallPermissionSettings" -> {
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                            val intent = Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                                data = Uri.parse("package:$packageName")
+                            }
+                            startActivity(intent)
+                            result.success(true)
+                        } else {
+                            result.success(true)
+                        }
+                    }
+                    "installApk" -> {
+                        val path = call.argument<String>("path")
+                        val file = path?.let(::File)
+                        if (file == null || !file.exists()) {
+                            result.error("file_not_found", "APK file does not exist", null)
+                            return@setMethodCallHandler
+                        }
+                        try {
+                            val uri = androidx.core.content.FileProvider.getUriForFile(
+                                this,
+                                "$packageName.fileprovider",
+                                file
+                            )
+                            val intent = Intent(Intent.ACTION_VIEW).apply {
+                                setDataAndType(uri, "application/vnd.android.package-archive")
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            }
+                            startActivity(intent)
+                            result.success(true)
+                        } catch (e: Exception) {
+                            result.error("install_error", e.message, null)
+                        }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {

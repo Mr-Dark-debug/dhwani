@@ -153,6 +153,27 @@ abstract final class DhwaniTheme {
         thickness: 1,
         space: 1,
       ),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return Colors.white;
+          }
+          return dark ? const Color(0xFFE0E0DA) : const Color(0xFF4A4A45);
+        }),
+        trackColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return DhwaniColors.signal;
+          }
+          return dark ? const Color(0xFF2E2E2A) : const Color(0xFFE2E2DC);
+        }),
+        trackOutlineColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return Colors.transparent;
+          }
+          return dark ? const Color(0xFF6E6E66) : const Color(0xFF9E9E94);
+        }),
+        trackOutlineWidth: const WidgetStatePropertyAll(1.5),
+      ),
     );
   }
 }

@@ -7,6 +7,7 @@ import '../core/audio/dhwani_audio_handler.dart';
 import '../core/persistence/app_database.dart';
 import '../core/recording/recording_service.dart';
 import '../core/notifications/notification_service.dart';
+import '../core/updater/app_update_service.dart';
 import '../data/datasources/radio_browser_api.dart';
 import '../data/models/radio_station.dart';
 import '../data/repositories/catalogue_repository.dart';
@@ -28,6 +29,9 @@ final recordingServiceProvider = Provider<RecordingService>(
 );
 final notificationServiceProvider = Provider<NotificationService>(
   (ref) => throw UnimplementedError(),
+);
+final appUpdateServiceProvider = Provider<AppUpdateService>(
+  (ref) => AppUpdateService(),
 );
 
 /// Requests Android's notification permission immediately before the first
