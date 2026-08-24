@@ -21,7 +21,14 @@ void main() {
     final recorder = container.read(recordingServiceProvider);
     recorder.configure(preferredFormat: 'auto');
 
-    await recorder.start(_swissJazz, _swissJazz.streams.single);
+    try {
+      await recorder.start(_swissJazz, _swissJazz.streams.single);
+    } catch (_) {
+      fail(
+        '${recorder.state.value.message ?? 'Recording did not start'}\n'
+        '${recorder.lastDiagnostic ?? 'No FFmpeg diagnostic'}',
+      );
+    }
     await _waitForBytes(recorder);
     await Future<void>.delayed(const Duration(seconds: 10));
     final entry = await recorder.stop();
@@ -51,7 +58,7 @@ Future<File> _waitForBytes(RecordingService recorder) async {
   final output = File(recorder.state.value.path!);
   for (var second = 0; second < 30; second++) {
     if (await output.exists() && await output.length() > 2048) return output;
-    if (recorder.state.value.status == RecordingStatus.error) {
+    if (recorder.state.value.status == RecordingStatus.failed) {
       fail(
         '${recorder.state.value.message ?? 'Recording connection ended'}\n'
         '${recorder.lastDiagnostic ?? 'No FFmpeg diagnostic'}',

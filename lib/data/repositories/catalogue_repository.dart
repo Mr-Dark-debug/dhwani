@@ -56,6 +56,9 @@ class CatalogueRepository {
       ...results.expand((stations) => stations),
     ]);
     if (merged.isNotEmpty) await database.upsertStations(merged);
+    await database.pruneStaleCatalogue(
+      DateTime.now().subtract(const Duration(days: 30)),
+    );
   }
 
   Future<List<CountrySummary>> countries() async {
@@ -84,7 +87,10 @@ class CatalogueRepository {
   }
 
   Future<void> loadCountry(String code) async {
-    final stations = await radioBrowser.byCountry(code);
+    final stations = await radioBrowser.byCountry(
+      code,
+      onPage: database.upsertStations,
+    );
     if (stations.isNotEmpty) await database.upsertStations(stations);
   }
 
@@ -120,7 +126,6 @@ class CatalogueRepository {
 
   Future<void> favourite(RadioStation station, bool value) =>
       database.setFavourite(station, value);
-  Future<void> addHistory(RadioStation station) => database.addHistory(station);
 
   static List<RadioStation> _merge(Iterable<RadioStation> input) {
     final result = <String, RadioStation>{};
@@ -143,10 +148,7 @@ class CatalogueRepository {
             .where((s) => !s.url.contains('wavespb.com'))
             .toList();
         final urls = <String, StationStream>{
-          for (final stream in [
-            ...filteredStationStreams,
-            ...previousFiltered,
-          ])
+          for (final stream in [...filteredStationStreams, ...previousFiltered])
             stream.url: stream,
         };
         result[semanticKey] = previous.copyWith(

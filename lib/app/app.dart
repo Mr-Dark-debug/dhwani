@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/settings/settings_controller.dart';
+import '../core/logging/dhwani_log.dart';
 import 'providers.dart';
 import 'router.dart';
 import 'theme/dhwani_theme.dart';
@@ -32,7 +35,14 @@ class _DhwaniAppState extends ConsumerState<DhwaniApp>
     if ((state == AppLifecycleState.paused ||
             state == AppLifecycleState.hidden) &&
         !ref.read(settingsProvider).backgroundPlayback) {
-      ref.read(audioHandlerProvider).pause();
+      unawaited(
+        ref.read(audioHandlerProvider).pause().catchError((
+          Object error,
+          StackTrace stack,
+        ) {
+          DhwaniLog.player('Lifecycle pause failed safely', error, stack);
+        }),
+      );
     }
   }
 
@@ -42,7 +52,9 @@ class _DhwaniAppState extends ConsumerState<DhwaniApp>
     final settings = ref.watch(settingsProvider);
 
     ref.listen(settingsProvider, (previous, next) {
-      ref.read(audioHandlerProvider).configureNetworkPolicy(
+      ref
+          .read(audioHandlerProvider)
+          .configureNetworkPolicy(
             wifiOnly: next.wifiOnly,
             preferLowerBitrate: next.preferLowerBitrate,
             autoReconnect: next.autoReconnect,
@@ -50,7 +62,9 @@ class _DhwaniAppState extends ConsumerState<DhwaniApp>
       ref
           .read(recordingServiceProvider)
           .configure(preferredFormat: next.recordingFormat);
-      ref.read(audioHandlerProvider).configureEqualizer(
+      ref
+          .read(audioHandlerProvider)
+          .configureEqualizer(
             next.equalizerPreset,
             customGains: next.equalizerGains,
           );

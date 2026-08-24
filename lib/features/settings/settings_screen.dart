@@ -4,11 +4,13 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../app/providers.dart';
 import '../../core/settings/settings_controller.dart';
 import '../../core/updater/app_update_sheet.dart';
+import '../../core/updater/app_update_service.dart';
 import '../../core/widgets/brand_mark.dart';
 import '../../data/models/radio_station.dart';
 
@@ -240,8 +242,11 @@ class SettingsScreen extends ConsumerWidget {
               contentPadding: EdgeInsets.zero,
               leading: const BrandMark(size: 42),
               title: const Text('Dhwani'),
-              subtitle: const Text(
-                'Version 1.1.0 · Real radio from your city and the world.',
+              subtitle: FutureBuilder<PackageInfo>(
+                future: PackageInfo.fromPlatform(),
+                builder: (context, snapshot) => Text(
+                  'Version ${snapshot.data?.version ?? '…'} · Real radio from your city and the world.',
+                ),
               ),
               onTap: () => _about(context),
             ),
@@ -259,32 +264,43 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                 );
                 final updater = ref.read(appUpdateServiceProvider);
-                final release = await updater.checkForUpdate();
+                final result = await updater.checkForUpdate();
                 if (!context.mounted) return;
-                if (release != null) {
+                if (result case UpdateAvailable(:final release)) {
                   AppUpdateSheet.show(
                     context,
                     release: release,
                     updateService: updater,
                   );
-                } else {
+                } else if (result is UpdateUpToDate) {
                   messenger.showSnackBar(
                     const SnackBar(
                       content: Text('You are on the latest version of Dhwani!'),
                     ),
                   );
+                } else {
+                  final message = switch (result) {
+                    UpdateCheckFailed(:final message) => message,
+                    UpdateCheckSkipped(:final message) => message,
+                    _ => 'The update check could not be completed.',
+                  };
+                  messenger.showSnackBar(SnackBar(content: Text(message)));
                 }
               },
             ),
             ListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Open-source licences'),
-              onTap: () => showLicensePage(
-                context: context,
-                applicationName: 'Dhwani',
-                applicationVersion: '1.1.0',
-                applicationIcon: const BrandMark(size: 52),
-              ),
+              onTap: () async {
+                final info = await PackageInfo.fromPlatform();
+                if (!context.mounted) return;
+                showLicensePage(
+                  context: context,
+                  applicationName: 'Dhwani',
+                  applicationVersion: '${info.version}+${info.buildNumber}',
+                  applicationIcon: const BrandMark(size: 52),
+                );
+              },
             ),
           ],
         ),
@@ -401,21 +417,25 @@ class SettingsScreen extends ConsumerWidget {
     }
   }
 
-  void _about(BuildContext context) => showAboutDialog(
-    context: context,
-    applicationName: 'Dhwani',
-    applicationVersion: '1.0.0',
-    applicationIcon: const BrandMark(size: 56),
-    children: const [
-      Text(
-        'Live playback uses internet streams. A displayed AM/FM frequency is terrestrial metadata; your phone does not receive distant RF.',
-      ),
-      SizedBox(height: 12),
-      Text(
-        'Sources: Radio Browser community directory and Akashvani discovery metadata. Personal usage data stays on this device.',
-      ),
-    ],
-  );
+  Future<void> _about(BuildContext context) async {
+    final info = await PackageInfo.fromPlatform();
+    if (!context.mounted) return;
+    showAboutDialog(
+      context: context,
+      applicationName: 'Dhwani',
+      applicationVersion: '${info.version}+${info.buildNumber}',
+      applicationIcon: const BrandMark(size: 56),
+      children: const [
+        Text(
+          'Live playback uses internet streams. A displayed AM/FM frequency is terrestrial metadata; your phone does not receive distant RF.',
+        ),
+        SizedBox(height: 12),
+        Text(
+          'Sources: Radio Browser community directory and Akashvani discovery metadata. Personal usage data stays on this device.',
+        ),
+      ],
+    );
+  }
 }
 
 class _Heading extends StatelessWidget {

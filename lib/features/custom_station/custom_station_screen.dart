@@ -229,10 +229,9 @@ class _CustomStationScreenState extends ConsumerState<CustomStationScreen> {
       return;
     }
     final station = _station();
-    await ref.read(audioHandlerProvider).setQueueStations([
-      station,
-    ], selected: station);
-    await ref.read(audioHandlerProvider).selectStation(station, autoplay: true);
+    await ref
+        .read(stationPlaybackControllerProvider)
+        .tune(station, queue: [station], autoplay: true);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

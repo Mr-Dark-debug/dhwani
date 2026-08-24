@@ -37,22 +37,22 @@ void main() {
     expect(find.text('1296'), findsOneWidget);
     expect(find.text('Play live'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Band filter'));
+    await tester.tap(find.byTooltip('Filter by source / band'));
     await tester.pumpAndSettle();
-    expect(find.text('All'), findsOneWidget);
-    expect(find.text('AM'), findsWidgets);
-    expect(find.text('FM'), findsOneWidget);
-    expect(find.text('NET'), findsOneWidget);
-    await tester.tap(find.text('AM').last);
+    expect(find.text('All Bands'), findsOneWidget);
+    expect(find.text('AM Radio'), findsOneWidget);
+    expect(find.text('FM Radio'), findsOneWidget);
+    expect(find.text('Internet (NET)'), findsOneWidget);
+    await tester.tap(find.text('AM Radio'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byTooltip('Save favourite'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Saved').last);
+    await tester.tap(find.byKey(const Key('nav-saved')));
     await tester.pumpAndSettle();
     expect(find.text('Akashvani Darbhanga'), findsWidgets);
 
-    await tester.tap(find.text('Discover').last);
+    await tester.tap(find.byKey(const Key('nav-discover')));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Search'));
     await tester.pumpAndSettle();
@@ -61,7 +61,9 @@ void main() {
     expect(find.text('Akashvani Darbhanga'), findsOneWidget);
     await tester.tap(find.text('Akashvani Darbhanga'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Station information'));
+    await tester.tap(find.byTooltip('More actions'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Station info'));
     await tester.pumpAndSettle();
     final stationInfoList = find.byType(ListView).last;
     await tester.drag(stationInfoList, const Offset(0, -480));

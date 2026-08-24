@@ -88,6 +88,100 @@ final selectedStationProvider =
       SelectedStationController.new,
     );
 
+final stationPlaybackControllerProvider = Provider<StationPlaybackController>(
+  StationPlaybackController.new,
+);
+
+/// One entry point for station selection across every screen.
+///
+/// It finalizes an active recording before changing its source, delegates the
+/// atomic queue/player transition to [DhwaniAudioHandler], and only then
+/// persists the selected station. Listening history is intentionally handled
+/// by the audio handler after playback is confirmed.
+class StationPlaybackController {
+  StationPlaybackController(this.ref);
+
+  final Ref ref;
+
+  Future<void> tune(
+    RadioStation station, {
+    required List<RadioStation> queue,
+    bool autoplay = false,
+    bool persistSelection = true,
+  }) async {
+    await _finishRecordingBeforeSwitch(station);
+    if (autoplay) {
+      await ref.read(notificationServiceProvider).requestPermission();
+    }
+    await ref
+        .read(audioHandlerProvider)
+        .tuneStation(station, queueStations: queue, autoplay: autoplay);
+    ref.read(selectedStationProvider.notifier).select(station);
+    if (persistSelection &&
+        station.sourceType != RadioSourceType.localRecording) {
+      final preferences = ref.read(preferencesProvider);
+      await preferences.setString('lastStation', station.encode());
+      await preferences.setBool('onboardingComplete', true);
+    }
+  }
+
+  Future<RadioStation?> next({bool? autoplay}) => _relative(1, autoplay);
+
+  Future<RadioStation?> previous({bool? autoplay}) => _relative(-1, autoplay);
+
+  Future<RadioStation?> _relative(int delta, bool? autoplay) async {
+    final handler = ref.read(audioHandlerProvider);
+    final current = handler.currentStation;
+    if (current == null) return null;
+    final queue = handler.queueStations;
+    if (queue.isEmpty) return null;
+    final index = queue.indexWhere((station) => station.id == current.id);
+    final currentIndex = index < 0 ? 0 : index;
+    final targetIndex = (currentIndex + delta).remainder(queue.length) < 0
+        ? (currentIndex + delta).remainder(queue.length) + queue.length
+        : (currentIndex + delta).remainder(queue.length);
+    final target = queue[targetIndex];
+    await tune(
+      target,
+      queue: queue,
+      autoplay: autoplay ?? handler.intendsPlayback,
+    );
+    return target;
+  }
+
+  Future<void> retry() async {
+    await ref.read(notificationServiceProvider).requestPermission();
+    await ref.read(audioHandlerProvider).retry();
+  }
+
+  Future<void> _finishRecordingBeforeSwitch(RadioStation target) async {
+    final recorder = ref.read(recordingServiceProvider);
+    final recording = recorder.state.value;
+    if (recording.station?.id == target.id ||
+        recording.status == RecordingStatus.idle ||
+        recording.status == RecordingStatus.saved ||
+        recording.status == RecordingStatus.failed) {
+      return;
+    }
+    if (recording.status == RecordingStatus.starting ||
+        recording.status == RecordingStatus.recording) {
+      await recorder.stop();
+      return;
+    }
+    await recorder.state
+        .firstWhere(
+          (value) =>
+              value.status == RecordingStatus.saved ||
+              value.status == RecordingStatus.idle ||
+              value.status == RecordingStatus.failed,
+        )
+        .timeout(const Duration(seconds: 12));
+    if (recorder.state.value.status == RecordingStatus.failed) {
+      throw StateError('Active recording could not be finalized safely.');
+    }
+  }
+}
+
 class BandFilterController extends Notifier<RadioBand?> {
   @override
   RadioBand? build() => null;

@@ -33,8 +33,10 @@ class _SleepTimerSheetState extends ConsumerState<SleepTimerSheet> {
     super.initState();
     final timerState = ref.read(sleepTimerProvider);
     if (timerState.active) {
-      _selectedMinutes =
-          (timerState.remaining.inSeconds / 60).ceil().clamp(1, 180);
+      _selectedMinutes = (timerState.remaining.inSeconds / 60).ceil().clamp(
+        1,
+        180,
+      );
     }
   }
 
@@ -62,8 +64,9 @@ class _SleepTimerSheetState extends ConsumerState<SleepTimerSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final surfaceColor =
-        isDark ? DhwaniColors.darkSurface : theme.colorScheme.surface;
+    final surfaceColor = isDark
+        ? DhwaniColors.darkSurface
+        : theme.colorScheme.surface;
     final timerState = ref.watch(sleepTimerProvider);
     final isRunning = timerState.active;
 
@@ -111,7 +114,8 @@ class _SleepTimerSheetState extends ConsumerState<SleepTimerSheet> {
                 children: [
                   Text(
                     'Sleep Session',
-                    style: theme.textTheme.headlineMedium?.copyWith(
+                    style:
+                        theme.textTheme.headlineMedium?.copyWith(
                           fontWeight: FontWeight.w800,
                           letterSpacing: -0.5,
                         ) ??
@@ -128,8 +132,9 @@ class _SleepTimerSheetState extends ConsumerState<SleepTimerSheet> {
                       height: 38,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color:
-                            theme.colorScheme.onSurface.withValues(alpha: .08),
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: .08,
+                        ),
                       ),
                       child: Icon(
                         Icons.close_rounded,
@@ -188,15 +193,16 @@ class _SleepTimerSheetState extends ConsumerState<SleepTimerSheet> {
                                               alpha: .14,
                                             )
                                           : theme.colorScheme.onSurface
-                                              .withValues(alpha: .06),
+                                                .withValues(alpha: .06),
                                       borderRadius: BorderRadius.circular(16),
                                       border: Border.all(
                                         color: _selectedMinutes == mins
                                             ? DhwaniColors.signal
                                             : theme.colorScheme.outline
-                                                .withValues(alpha: .3),
-                                        width:
-                                            _selectedMinutes == mins ? 1.4 : 1,
+                                                  .withValues(alpha: .3),
+                                        width: _selectedMinutes == mins
+                                            ? 1.4
+                                            : 1,
                                       ),
                                     ),
                                     child: Text(
@@ -231,8 +237,7 @@ class _SleepTimerSheetState extends ConsumerState<SleepTimerSheet> {
                             onTap: () async {
                               final mins = await showDialog<int>(
                                 context: context,
-                                builder: (ctx) =>
-                                    const _CustomDurationDialog(),
+                                builder: (ctx) => const _CustomDurationDialog(),
                               );
                               if (mins != null && mins > 0 && mounted) {
                                 _onMinutesChanged(mins);
@@ -278,8 +283,9 @@ class _SleepTimerSheetState extends ConsumerState<SleepTimerSheet> {
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color:
-                            theme.colorScheme.onSurface.withValues(alpha: .04),
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: .04,
+                        ),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
                           color: theme.colorScheme.outline.withValues(
@@ -511,10 +517,8 @@ class _CustomDurationDialogState extends State<_CustomDurationDialog> {
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed: () => Navigator.pop(
-            context,
-            int.tryParse(_controller.text),
-          ),
+          onPressed: () =>
+              Navigator.pop(context, int.tryParse(_controller.text)),
           child: const Text('Set'),
         ),
       ],
@@ -688,9 +692,7 @@ class _TimerDialPainter extends CustomPainter {
 
     final sweepFraction = (minutes % 60) / 60.0;
     final sweepAngle =
-        (sweepFraction == 0 && minutes > 0 ? 1.0 : sweepFraction) *
-        2 *
-        math.pi;
+        (sweepFraction == 0 && minutes > 0 ? 1.0 : sweepFraction) * 2 * math.pi;
 
     const hourLabels = [
       '12',
@@ -785,10 +787,8 @@ class _TimerDialPainter extends CustomPainter {
 
     // 4. Indicator Needle
     final needleAngle = sweepAngle - math.pi / 2;
-    final needleStartX =
-        center.dx + (ticksRadius - 14) * math.cos(needleAngle);
-    final needleStartY =
-        center.dy + (ticksRadius - 14) * math.sin(needleAngle);
+    final needleStartX = center.dx + (ticksRadius - 14) * math.cos(needleAngle);
+    final needleStartY = center.dy + (ticksRadius - 14) * math.sin(needleAngle);
     final needleEndX = center.dx + (ticksRadius + 2) * math.cos(needleAngle);
     final needleEndY = center.dy + (ticksRadius + 2) * math.sin(needleAngle);
 
@@ -805,9 +805,7 @@ class _TimerDialPainter extends CustomPainter {
 
     // 5. Center Cutout Circle Fill (surface card)
     final innerCenterPaint = Paint()
-      ..color = isDark
-          ? const Color(0xFF22221F)
-          : const Color(0xFFEFEFEA)
+      ..color = isDark ? const Color(0xFF22221F) : const Color(0xFFEFEFEA)
       ..style = PaintingStyle.fill;
 
     canvas.drawCircle(center, innerRadius, innerCenterPaint);

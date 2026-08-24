@@ -198,12 +198,9 @@ class DiscoverScreen extends ConsumerWidget {
     RadioStation station,
     List<RadioStation> queue,
   ) async {
-    ref.read(selectedStationProvider.notifier).select(station);
     await ref
-        .read(audioHandlerProvider)
-        .setQueueStations(queue, selected: station);
-    await ref.read(audioHandlerProvider).selectStation(station);
-    await ref.read(catalogueRepositoryProvider).addHistory(station);
+        .read(stationPlaybackControllerProvider)
+        .tune(station, queue: queue);
     if (context.mounted) context.go('/radio');
   }
 }

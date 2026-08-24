@@ -53,11 +53,11 @@ class DhwaniShell extends ConsumerWidget {
                     ],
                     border: Border(
                       top: BorderSide(
-                        color: Theme.of(context).dividerTheme.color ??
-                            Theme.of(context)
-                                .colorScheme
-                                .outline
-                                .withValues(alpha: .3),
+                        color:
+                            Theme.of(context).dividerTheme.color ??
+                            Theme.of(
+                              context,
+                            ).colorScheme.outline.withValues(alpha: .3),
                         width: 1,
                       ),
                     ),
@@ -70,10 +70,9 @@ class DhwaniShell extends ConsumerWidget {
                       ),
                       child: GNav(
                         rippleColor: DhwaniColors.signal.withValues(alpha: .18),
-                        hoverColor: Theme.of(context)
-                            .colorScheme
-                            .onSurface
-                            .withValues(alpha: .06),
+                        hoverColor: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: .06),
                         gap: 8,
                         activeColor: DhwaniColors.signal,
                         iconSize: 22,
@@ -90,12 +89,12 @@ class DhwaniShell extends ConsumerWidget {
                         ),
                         duration: const Duration(milliseconds: 350),
                         curve: Curves.easeInOutCubic,
-                        tabBackgroundColor:
-                            DhwaniColors.signal.withValues(alpha: .12),
-                        color: Theme.of(context)
-                            .colorScheme
-                            .onSurface
-                            .withValues(alpha: .55),
+                        tabBackgroundColor: DhwaniColors.signal.withValues(
+                          alpha: .12,
+                        ),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: .55),
                         selectedIndex: selected < 0 ? 0 : selected,
                         onTabChange: (index) {
                           HapticFeedback.selectionClick();
@@ -103,18 +102,22 @@ class DhwaniShell extends ConsumerWidget {
                         },
                         tabs: const [
                           GButton(
+                            key: Key('nav-radio'),
                             icon: Icons.radio_outlined,
                             text: 'Radio',
                           ),
                           GButton(
+                            key: Key('nav-discover'),
                             icon: Icons.explore_outlined,
                             text: 'Discover',
                           ),
                           GButton(
+                            key: Key('nav-saved'),
                             icon: Icons.favorite_outline_rounded,
                             text: 'Saved',
                           ),
                           GButton(
+                            key: Key('nav-recordings'),
                             icon: Icons.library_music_outlined,
                             text: 'Recordings',
                           ),

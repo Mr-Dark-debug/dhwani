@@ -95,12 +95,14 @@ class _RecordingTile extends ConsumerWidget {
           directory: RadioDirectory.custom,
           sourceType: RadioSourceType.localRecording,
         );
-        await ref.read(audioHandlerProvider).setQueueStations([
-          station,
-        ], selected: station);
         await ref
-            .read(audioHandlerProvider)
-            .selectStation(station, autoplay: true);
+            .read(stationPlaybackControllerProvider)
+            .tune(
+              station,
+              queue: [station],
+              autoplay: true,
+              persistSelection: false,
+            );
         if (context.mounted) {
           _showRecordingPlayer(context, ref, entry);
         }

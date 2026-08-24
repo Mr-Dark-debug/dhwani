@@ -36,8 +36,9 @@ class CarModeScreen extends ConsumerWidget {
                     child: _BigButton(
                       icon: Icons.skip_previous,
                       label: 'Previous',
-                      onTap: () =>
-                          ref.read(audioHandlerProvider).skipToPrevious(),
+                      onTap: () => ref
+                          .read(stationPlaybackControllerProvider)
+                          .previous(),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -55,7 +56,8 @@ class CarModeScreen extends ConsumerWidget {
                     child: _BigButton(
                       icon: Icons.skip_next,
                       label: 'Next',
-                      onTap: () => ref.read(audioHandlerProvider).skipToNext(),
+                      onTap: () =>
+                          ref.read(stationPlaybackControllerProvider).next(),
                     ),
                   ),
                 ],

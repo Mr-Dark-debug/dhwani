@@ -498,12 +498,9 @@ Future<void> _openStation(
   RadioStation station,
   List<RadioStation> stations,
 ) async {
-  ref.read(selectedStationProvider.notifier).select(station);
   await ref
-      .read(audioHandlerProvider)
-      .setQueueStations(stations, selected: station);
-  await ref.read(audioHandlerProvider).selectStation(station, autoplay: true);
-  await ref.read(catalogueRepositoryProvider).addHistory(station);
+      .read(stationPlaybackControllerProvider)
+      .tune(station, queue: stations, autoplay: true);
   if (context.mounted) context.go('/radio');
 }
 
@@ -540,13 +537,9 @@ class _StationList extends ConsumerWidget {
               )
             : null,
         onTap: () async {
-          ref.read(selectedStationProvider.notifier).select(station);
           await ref
-              .read(audioHandlerProvider)
-              .setQueueStations(stations, selected: station);
-          await ref
-              .read(audioHandlerProvider)
-              .selectStation(station, autoplay: true);
+              .read(stationPlaybackControllerProvider)
+              .tune(station, queue: stations, autoplay: true);
           if (context.mounted) context.go('/radio');
         },
       );

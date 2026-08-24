@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'app/app.dart';
 import 'app/providers.dart';
 import 'core/audio/dhwani_audio_handler.dart';
+import 'core/logging/dhwani_log.dart';
 import 'core/persistence/app_database.dart';
 import 'core/recording/recording_service.dart';
 import 'core/notifications/notification_service.dart';
@@ -19,6 +21,27 @@ import 'data/repositories/catalogue_repository.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    DhwaniLog.android(
+      'Uncaught Flutter framework error',
+      details.exception,
+      details.stack,
+    );
+  };
+  PlatformDispatcher.instance.onError = (error, stack) {
+    DhwaniLog.android('Uncaught platform callback error', error, stack);
+    return true;
+  };
+  final startup = runZonedGuarded<Future<void>>(
+    _startApp,
+    (error, stack) =>
+        DhwaniLog.android('Uncaught application-zone error', error, stack),
+  );
+  if (startup != null) await startup;
+}
+
+Future<void> _startApp() async {
   await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -31,10 +54,16 @@ Future<void> main() async {
   final preferences = await SharedPreferences.getInstance();
   final audioHandler = await AudioService.init(
     builder: () => DhwaniAudioHandler(
-      onSessionEnded: (station, duration) =>
-          database.addHistory(station, duration: duration),
-      onStreamResult: (station, stream, success) =>
-          database.recordStreamResult(station, stream.url, success: success),
+      onSessionStarted: database.startHistorySession,
+      onSessionUpdated: database.updateHistorySession,
+      onStreamResult: (station, stream, success, failure, startupTime) =>
+          database.recordStreamResult(
+            station,
+            stream.url,
+            success: success,
+            failureReason: failure?.reason.name,
+            startupTime: startupTime,
+          ),
     ),
     config: const AudioServiceConfig(
       androidNotificationChannelId: 'com.prashant.dhwani.playback',
@@ -54,26 +83,44 @@ Future<void> main() async {
   final notifications = NotificationService(
     onAction: (payload) {
       unawaited(() async {
-        final separator = payload.indexOf(':');
-        if (separator < 0) return;
-        final details = payload.substring(separator + 1).split('|');
-        final stationId = details.first;
-        final station = (await database.allStations())
-            .where((item) => item.id == stationId)
-            .firstOrNull;
-        if (station == null) return;
-        await preferences.setString('lastStation', station.encode());
-        await preferences.setBool('onboardingComplete', true);
-        await audioHandler.setQueueStations([station], selected: station);
-        await audioHandler.selectStation(station);
-        if (payload.startsWith('alarm:') && details.length > 1) {
-          final volume = double.tryParse(details[1]);
-          if (volume != null) await audioHandler.setVolume(volume);
+        try {
+          final separator = payload.indexOf(':');
+          if (separator < 0) return;
+          final details = payload.substring(separator + 1).split('|');
+          final stationId = details.first;
+          final station = (await database.allStations())
+              .where((item) => item.id == stationId)
+              .firstOrNull;
+          if (station == null) return;
+          await preferences.setString('lastStation', station.encode());
+          await preferences.setBool('onboardingComplete', true);
+          final activeRecording = recorder.state.value;
+          if (activeRecording.station?.id != station.id &&
+              (activeRecording.status == RecordingStatus.starting ||
+                  activeRecording.status == RecordingStatus.recording)) {
+            await recorder.stop();
+          }
+          final alarm = payload.startsWith('alarm:');
+          await audioHandler.tuneStation(
+            station,
+            queueStations: [station],
+            autoplay: alarm,
+          );
+          if (alarm && details.length > 1) {
+            final volume = double.tryParse(details[1]);
+            if (volume != null) await audioHandler.setVolume(volume);
+          }
+        } catch (error, stack) {
+          DhwaniLog.android('Notification action failed safely', error, stack);
         }
       }());
     },
   );
-  unawaited(notifications.initialize());
+  unawaited(
+    notifications.initialize().catchError((Object error, StackTrace stack) {
+      DhwaniLog.android('Notification initialization failed', error, stack);
+    }),
+  );
 
   runApp(
     ProviderScope(

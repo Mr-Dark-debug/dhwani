@@ -41,8 +41,9 @@ class DhwaniDropdown<T> extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final surfaceColor =
-        isDark ? const Color(0xFF1E1E1C) : theme.colorScheme.surface;
+    final surfaceColor = isDark
+        ? const Color(0xFF1E1E1C)
+        : theme.colorScheme.surface;
     final outlineColor = theme.colorScheme.outline.withValues(alpha: .2);
 
     return Theme(
@@ -83,8 +84,9 @@ class DhwaniDropdown<T> extends StatelessWidget {
                   child: Text(
                     item.label,
                     style: TextStyle(
-                      fontWeight:
-                          isSelected ? FontWeight.w800 : FontWeight.w600,
+                      fontWeight: isSelected
+                          ? FontWeight.w800
+                          : FontWeight.w600,
                       fontSize: 14,
                       color: isSelected
                           ? DhwaniColors.signal

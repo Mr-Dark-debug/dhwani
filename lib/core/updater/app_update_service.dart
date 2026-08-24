@@ -1,27 +1,47 @@
 import 'dart:io';
+
+import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../logging/dhwani_log.dart';
+
+class AppIdentity {
+  const AppIdentity({
+    required this.packageName,
+    required this.version,
+    required this.buildNumber,
+  });
+
+  final String packageName;
+  final String version;
+  final int buildNumber;
+}
 
 class AppReleaseInfo {
   const AppReleaseInfo({
     required this.version,
+    required this.buildNumber,
     required this.tagName,
     required this.title,
     required this.notes,
     required this.downloadUrl,
+    required this.checksumUrl,
     required this.apkFileName,
     this.apkSizeBytes = 0,
     this.publishedAt,
   });
 
   final String version;
+  final int buildNumber;
   final String tagName;
   final String title;
   final String notes;
   final String downloadUrl;
+  final String checksumUrl;
   final String apkFileName;
   final int apkSizeBytes;
   final DateTime? publishedAt;
@@ -33,104 +53,190 @@ class AppReleaseInfo {
   }
 }
 
-class AppUpdateService {
-  AppUpdateService({Dio? dio})
-      : _dio = dio ??
-            Dio(
-              BaseOptions(
-                connectTimeout: const Duration(seconds: 10),
-                receiveTimeout: const Duration(seconds: 30),
-                headers: const {
-                  'Accept': 'application/vnd.github.v3+json',
-                  'User-Agent': 'Dhwani-App-Updater',
-                },
-              ),
-            );
+sealed class UpdateCheckResult {
+  const UpdateCheckResult();
+}
 
-  static const String currentAppVersion = '1.1.0';
-  static const int currentBuildNumber = 3;
+class UpdateAvailable extends UpdateCheckResult {
+  const UpdateAvailable(this.release);
+  final AppReleaseInfo release;
+}
+
+class UpdateUpToDate extends UpdateCheckResult {
+  const UpdateUpToDate();
+}
+
+class UpdateCheckSkipped extends UpdateCheckResult {
+  const UpdateCheckSkipped(this.message);
+  final String message;
+}
+
+class UpdateCheckFailed extends UpdateCheckResult {
+  const UpdateCheckFailed(this.message);
+  final String message;
+}
+
+typedef AppIdentityLoader = Future<AppIdentity> Function();
+typedef TemporaryDirectoryLoader = Future<Directory> Function();
+
+class AppUpdateService {
+  AppUpdateService({
+    Dio? dio,
+    AppIdentityLoader? identityLoader,
+    TemporaryDirectoryLoader? temporaryDirectoryLoader,
+    MethodChannel? installerChannel,
+    this.expectedSigningCertificateSha256 =
+        'F11E976967911C8E585DD88817D6587076A802840699EEBF7E3C8304BEDBE3B5',
+  }) : _dio =
+           dio ??
+           Dio(
+             BaseOptions(
+               connectTimeout: const Duration(seconds: 10),
+               receiveTimeout: const Duration(seconds: 45),
+               sendTimeout: const Duration(seconds: 10),
+               headers: const {
+                 'Accept': 'application/vnd.github+json',
+                 'X-GitHub-Api-Version': '2022-11-28',
+                 'User-Agent': 'Dhwani-App-Updater',
+               },
+             ),
+           ),
+       _identityLoader = identityLoader ?? _platformIdentity,
+       _temporaryDirectoryLoader =
+           temporaryDirectoryLoader ?? getTemporaryDirectory,
+       _installerChannel =
+           installerChannel ??
+           const MethodChannel('com.prashant.dhwani/installer');
+
   static const String githubRepo = 'Mr-Dark-debug/dhwani';
-  static const MethodChannel _installerChannel =
-      MethodChannel('com.prashant.dhwani/installer');
+  static const String _lastAutomaticCheckKey = 'updateLastAutomaticCheck';
+  static const Duration automaticCheckCooldown = Duration(hours: 12);
 
   final Dio _dio;
+  final AppIdentityLoader _identityLoader;
+  final TemporaryDirectoryLoader _temporaryDirectoryLoader;
+  final MethodChannel _installerChannel;
+  final String expectedSigningCertificateSha256;
 
   static bool isNewerVersion(String remoteTag, String localVersion) {
-    final cleanRemote = remoteTag.replaceAll(RegExp(r'^[vV]'), '').trim();
-    final cleanLocal = localVersion.replaceAll(RegExp(r'^[vV]'), '').trim();
-
-    final remoteParts = cleanRemote
-        .split(RegExp(r'[.+–-]'))
-        .map((e) => int.tryParse(e) ?? 0)
-        .toList();
-    final localParts = cleanLocal
-        .split(RegExp(r'[.+–-]'))
-        .map((e) => int.tryParse(e) ?? 0)
-        .toList();
-
-    final maxLength = remoteParts.length > localParts.length
-        ? remoteParts.length
-        : localParts.length;
-
-    for (var i = 0; i < maxLength; i++) {
-      final remoteVal = i < remoteParts.length ? remoteParts[i] : 0;
-      final localVal = i < localParts.length ? localParts[i] : 0;
-      if (remoteVal > localVal) return true;
-      if (remoteVal < localVal) return false;
+    final remote = _semanticParts(remoteTag);
+    final local = _semanticParts(localVersion);
+    for (var index = 0; index < 3; index++) {
+      if (remote[index] > local[index]) return true;
+      if (remote[index] < local[index]) return false;
     }
     return false;
   }
 
-  Future<AppReleaseInfo?> checkForUpdate() async {
+  Future<UpdateCheckResult> checkForUpdate({bool manual = true}) async {
+    if (!manual) {
+      final preferences = await SharedPreferences.getInstance();
+      final previous = DateTime.tryParse(
+        preferences.getString(_lastAutomaticCheckKey) ?? '',
+      );
+      if (previous != null &&
+          DateTime.now().difference(previous) < automaticCheckCooldown) {
+        return const UpdateCheckSkipped(
+          'Automatic update check is in its cooldown period.',
+        );
+      }
+      await preferences.setString(
+        _lastAutomaticCheckKey,
+        DateTime.now().toIso8601String(),
+      );
+    }
+
     try {
-      final response = await _dio.get<Map<String, dynamic>>(
+      final identity = await _identityLoader();
+      final response = await _dio.get<Map<String, Object?>>(
         'https://api.github.com/repos/$githubRepo/releases/latest',
       );
       final data = response.data;
-      if (data == null) return null;
-
-      final tagName = data['tag_name'] as String? ?? '';
-      final title = data['name'] as String? ?? tagName;
-      final notes = data['body'] as String? ?? 'Bug fixes and improvements.';
-      final publishedStr = data['published_at'] as String?;
-      final publishedAt =
-          publishedStr != null ? DateTime.tryParse(publishedStr) : null;
-
-      final assets = (data['assets'] as List<dynamic>?) ?? [];
-      String? downloadUrl;
-      String apkName = 'dhwani-update.apk';
-      int apkSize = 0;
-
-      for (final asset in assets) {
-        if (asset is Map<String, dynamic>) {
-          final name = asset['name'] as String? ?? '';
-          if (name.endsWith('.apk')) {
-            downloadUrl = asset['browser_download_url'] as String?;
-            apkName = name;
-            apkSize = (asset['size'] as num?)?.toInt() ?? 0;
-            break;
-          }
-        }
+      if (data == null) {
+        return const UpdateCheckFailed('GitHub returned an empty response.');
       }
-
-      if (downloadUrl == null) return null;
-
-      if (isNewerVersion(tagName, currentAppVersion)) {
-        return AppReleaseInfo(
-          version: tagName.replaceAll(RegExp(r'^[vV]'), ''),
-          tagName: tagName,
-          title: title,
-          notes: notes,
-          downloadUrl: downloadUrl,
-          apkFileName: apkName,
-          apkSizeBytes: apkSize,
-          publishedAt: publishedAt,
+      if (data['draft'] == true || data['prerelease'] == true) {
+        return const UpdateUpToDate();
+      }
+      final tagName = data['tag_name']?.toString().trim() ?? '';
+      final version = tagName.replaceFirst(RegExp(r'^[vV]'), '');
+      if (!_isStableVersion(version)) {
+        return const UpdateCheckFailed(
+          'The newest release does not use a stable semantic version.',
         );
       }
-    } catch (e, stack) {
-      DhwaniLog.api('Failed to check for updates', e, stack);
+      final assets = (data['assets'] as List<Object?>? ?? const [])
+          .whereType<Map>()
+          .map((asset) => asset.cast<String, Object?>())
+          .toList();
+      final apkPattern = RegExp(
+        '^Dhwani-v${RegExp.escape(version)}-build(\\d+)-android\\.apk\$',
+      );
+      final matchingApks = assets.where((asset) {
+        return apkPattern.hasMatch(asset['name']?.toString() ?? '');
+      }).toList();
+      if (matchingApks.length != 1) {
+        return const UpdateCheckFailed(
+          'The release does not contain one deterministic Android APK.',
+        );
+      }
+      final apk = matchingApks.single;
+      final apkName = apk['name']!.toString();
+      final buildNumber = int.parse(apkPattern.firstMatch(apkName)!.group(1)!);
+      final checksumName = '$apkName.sha256';
+      final checksums = assets
+          .where((asset) => asset['name']?.toString() == checksumName)
+          .toList();
+      if (checksums.length != 1) {
+        return const UpdateCheckFailed(
+          'The release checksum is missing or ambiguous.',
+        );
+      }
+      final newer =
+          buildNumber > identity.buildNumber &&
+          (isNewerVersion(version, identity.version) ||
+              version == identity.version);
+      if (!newer) return const UpdateUpToDate();
+      final downloadUrl = apk['browser_download_url']?.toString() ?? '';
+      final checksumUrl =
+          checksums.single['browser_download_url']?.toString() ?? '';
+      if (!_isGitHubAssetUrl(downloadUrl) || !_isGitHubAssetUrl(checksumUrl)) {
+        return const UpdateCheckFailed(
+          'The release asset URL is not a trusted GitHub download.',
+        );
+      }
+      return UpdateAvailable(
+        AppReleaseInfo(
+          version: version,
+          buildNumber: buildNumber,
+          tagName: tagName,
+          title: data['name']?.toString() ?? tagName,
+          notes: data['body']?.toString() ?? 'Bug fixes and improvements.',
+          downloadUrl: downloadUrl,
+          checksumUrl: checksumUrl,
+          apkFileName: apkName,
+          apkSizeBytes: (apk['size'] as num?)?.toInt() ?? 0,
+          publishedAt: DateTime.tryParse(
+            data['published_at']?.toString() ?? '',
+          ),
+        ),
+      );
+    } on DioException catch (error, stack) {
+      DhwaniLog.api('Failed to check for updates', error, stack);
+      final rateLimited =
+          error.response?.statusCode == 403 ||
+          error.response?.statusCode == 429;
+      return UpdateCheckFailed(
+        rateLimited
+            ? 'GitHub rate-limited the update check. Try again later.'
+            : 'Could not reach GitHub Releases. Check the connection and retry.',
+      );
+    } catch (error, stack) {
+      DhwaniLog.api('Failed to check for updates', error, stack);
+      return const UpdateCheckFailed(
+        'The update response could not be verified.',
+      );
     }
-    return null;
   }
 
   Future<File> downloadApk(
@@ -138,62 +244,179 @@ class AppUpdateService {
     required void Function(double progress, int received, int total) onProgress,
     CancelToken? cancelToken,
   }) async {
-    final tempDir = await getTemporaryDirectory();
-    final savePath = '${tempDir.path}/${release.apkFileName}';
-    final targetFile = File(savePath);
-
-    if (await targetFile.exists()) {
-      await targetFile.delete();
-    }
-
-    await _dio.download(
-      release.downloadUrl,
-      savePath,
-      cancelToken: cancelToken,
-      onReceiveProgress: (received, total) {
-        if (total > 0) {
-          final progress = (received / total).clamp(0.0, 1.0);
-          onProgress(progress, received, total);
-        } else {
-          onProgress(0.5, received, total);
-        }
-      },
+    final identity = await _identityLoader();
+    final directory = await _temporaryDirectoryLoader();
+    final finalFile = File(
+      '${directory.path}${Platform.pathSeparator}${release.apkFileName}',
     );
-
-    return targetFile;
+    final partialFile = File('${finalFile.path}.part');
+    await _deleteIfPresent(partialFile);
+    await _deleteIfPresent(finalFile);
+    try {
+      final checksumResponse = await _dio.get<String>(
+        release.checksumUrl,
+        cancelToken: cancelToken,
+        options: Options(responseType: ResponseType.plain),
+      );
+      final expectedHash = RegExp(
+        r'\b[a-fA-F0-9]{64}\b',
+      ).firstMatch(checksumResponse.data ?? '')?.group(0)?.toUpperCase();
+      if (expectedHash == null) {
+        throw const UpdateVerificationException(
+          'The release checksum file is invalid.',
+        );
+      }
+      await _dio.download(
+        release.downloadUrl,
+        partialFile.path,
+        cancelToken: cancelToken,
+        deleteOnError: true,
+        onReceiveProgress: (received, total) {
+          onProgress(
+            total > 0 ? (received / total).clamp(0.0, 1.0) : 0,
+            received,
+            total,
+          );
+        },
+      );
+      final length = await partialFile.length();
+      if (length <= 0 ||
+          release.apkSizeBytes > 0 && length != release.apkSizeBytes) {
+        throw const UpdateVerificationException(
+          'The downloaded APK size does not match the release metadata.',
+        );
+      }
+      final actualHash = (await sha256.bind(partialFile.openRead()).first)
+          .toString()
+          .toUpperCase();
+      if (actualHash != expectedHash) {
+        throw const UpdateVerificationException(
+          'The downloaded APK checksum does not match.',
+        );
+      }
+      final inspection = await _installerChannel
+          .invokeMapMethod<String, Object?>('inspectApk', {
+            'path': partialFile.path,
+          });
+      if (inspection == null || inspection['archiveValid'] != true) {
+        throw const UpdateVerificationException(
+          'Android could not verify the downloaded APK archive.',
+        );
+      }
+      final packageName = inspection['packageName']?.toString();
+      final versionCode = (inspection['versionCode'] as num?)?.toInt() ?? -1;
+      final signatureMatches = inspection['signatureMatchesCurrent'] == true;
+      final signerHashes =
+          (inspection['signerSha256'] as List<Object?>? ?? const [])
+              .map((value) => value.toString().toUpperCase())
+              .toSet();
+      if (packageName != identity.packageName ||
+          packageName != 'com.prashant.dhwani') {
+        throw const UpdateVerificationException(
+          'The downloaded APK belongs to a different application.',
+        );
+      }
+      if (versionCode != release.buildNumber ||
+          versionCode <= identity.buildNumber) {
+        throw const UpdateVerificationException(
+          'The downloaded APK build identity is not a newer expected build.',
+        );
+      }
+      if (!signatureMatches ||
+          !signerHashes.contains(expectedSigningCertificateSha256)) {
+        throw const UpdateVerificationException(
+          'The downloaded APK signing certificate does not match Dhwani.',
+        );
+      }
+      return partialFile.rename(finalFile.path);
+    } catch (_) {
+      await _deleteIfPresent(partialFile);
+      rethrow;
+    }
   }
 
   Future<bool> canRequestPackageInstalls() async {
     if (!Platform.isAndroid) return false;
     try {
-      final allowed = await _installerChannel
-          .invokeMethod<bool>('canRequestPackageInstalls');
-      return allowed ?? true;
-    } catch (e) {
-      return true;
-    }
-  }
-
-  Future<void> openInstallPermissionSettings() async {
-    if (!Platform.isAndroid) return;
-    try {
-      await _installerChannel.invokeMethod('openInstallPermissionSettings');
-    } catch (e, stack) {
-      DhwaniLog.player('Could not open install permission settings', e, stack);
-    }
-  }
-
-  Future<bool> installApk(String filePath) async {
-    if (!Platform.isAndroid) return false;
-    try {
-      final success = await _installerChannel.invokeMethod<bool>(
-        'installApk',
-        {'path': filePath},
-      );
-      return success ?? true;
-    } catch (e, stack) {
-      DhwaniLog.player('Failed to launch APK installer', e, stack);
+      return await _installerChannel.invokeMethod<bool>(
+            'canRequestPackageInstalls',
+          ) ??
+          false;
+    } catch (error, stack) {
+      DhwaniLog.player('Could not inspect install permission', error, stack);
       return false;
     }
   }
+
+  Future<bool> openInstallPermissionSettings() async {
+    if (!Platform.isAndroid) return false;
+    try {
+      return await _installerChannel.invokeMethod<bool>(
+            'openInstallPermissionSettings',
+          ) ??
+          false;
+    } catch (error, stack) {
+      DhwaniLog.player(
+        'Could not open install permission settings',
+        error,
+        stack,
+      );
+      return false;
+    }
+  }
+
+  /// Returns true only when Android accepted the installer intent.
+  /// Installation success is confirmed by Android after this app is replaced.
+  Future<bool> installApk(String filePath) async {
+    if (!Platform.isAndroid) return false;
+    try {
+      return await _installerChannel.invokeMethod<bool>('installApk', {
+            'path': filePath,
+          }) ??
+          false;
+    } catch (error, stack) {
+      DhwaniLog.player('Failed to launch APK installer', error, stack);
+      return false;
+    }
+  }
+
+  static Future<AppIdentity> _platformIdentity() async {
+    final info = await PackageInfo.fromPlatform();
+    return AppIdentity(
+      packageName: info.packageName,
+      version: info.version,
+      buildNumber: int.tryParse(info.buildNumber) ?? 0,
+    );
+  }
+
+  static List<int> _semanticParts(String value) {
+    final clean = value.replaceFirst(RegExp(r'^[vV]'), '').trim();
+    final match = RegExp(r'^(\d+)\.(\d+)\.(\d+)').firstMatch(clean);
+    if (match == null) return const [0, 0, 0];
+    return [
+      for (var index = 1; index <= 3; index++) int.parse(match.group(index)!),
+    ];
+  }
+
+  static bool _isStableVersion(String value) =>
+      RegExp(r'^\d+\.\d+\.\d+$').hasMatch(value);
+
+  static bool _isGitHubAssetUrl(String value) {
+    final uri = Uri.tryParse(value);
+    return uri?.scheme == 'https' &&
+        (uri?.host == 'github.com' ||
+            uri?.host == 'objects.githubusercontent.com');
+  }
+
+  static Future<void> _deleteIfPresent(File file) async {
+    if (await file.exists()) await file.delete();
+  }
+}
+
+class UpdateVerificationException implements Exception {
+  const UpdateVerificationException(this.message);
+  final String message;
+
+  @override
+  String toString() => message;
 }

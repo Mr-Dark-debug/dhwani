@@ -15,6 +15,7 @@ import '../../core/settings/settings_controller.dart';
 import '../../core/widgets/dhwani_dropdown.dart';
 import '../../core/widgets/dhwani_shell.dart';
 import '../../core/updater/app_update_sheet.dart';
+import '../../core/updater/app_update_service.dart';
 import '../../data/models/radio_station.dart';
 import 'sleep_timer_sheet.dart';
 
@@ -36,8 +37,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       if (!_updateChecked && mounted) {
         _updateChecked = true;
         final updater = ref.read(appUpdateServiceProvider);
-        final release = await updater.checkForUpdate();
-        if (release != null && mounted) {
+        final result = await updater.checkForUpdate(manual: false);
+        if (result case UpdateAvailable(:final release) when mounted) {
           AppUpdateSheet.show(
             context,
             release: release,
@@ -53,8 +54,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     ref.listen(playerSnapshotProvider, (previous, next) {
       final current = next.value;
       if (current != null &&
-          current.status == DhwaniPlaybackStatus.error &&
-          previous?.value?.status != DhwaniPlaybackStatus.error) {
+          _isTerminalPlaybackFailure(current.status) &&
+          !_isTerminalPlaybackFailure(previous?.value?.status)) {
         final messenger = ScaffoldMessenger.of(context);
         messenger.hideCurrentSnackBar();
         messenger.showSnackBar(
@@ -85,13 +86,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
             action: SnackBarAction(
               label: 'Next',
               textColor: Colors.white,
-              onPressed: () async {
-                await ref.read(audioHandlerProvider).skipToNext();
-                final curr = ref.read(audioHandlerProvider).currentStation;
-                if (curr != null) {
-                  ref.read(selectedStationProvider.notifier).select(curr);
-                }
-              },
+              onPressed: () =>
+                  ref.read(stationPlaybackControllerProvider).next(),
             ),
             duration: const Duration(seconds: 4),
           ),
@@ -114,19 +110,16 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
           all.where((item) => item.isDarbhanga).firstOrNull ?? all.first;
       final value = restored;
       WidgetsBinding.instance.addPostFrameCallback((_) async {
-        ref.read(selectedStationProvider.notifier).select(value);
         final queue = tuningQueue(
           all,
           current: value,
           preferredScope: ref.read(settingsProvider).defaultScope,
         );
         await ref
-            .read(audioHandlerProvider)
-            .setQueueStations(queue, selected: value);
-        await ref
-            .read(audioHandlerProvider)
-            .selectStation(
+            .read(stationPlaybackControllerProvider)
+            .tune(
               value,
+              queue: queue,
               autoplay: ref.read(settingsProvider).autoPlay,
             );
       });
@@ -217,10 +210,8 @@ class _PlayerContent extends ConsumerWidget {
     final largeText = MediaQuery.textScalerOf(context).scale(1) > 1.1;
     final tight = compact && largeText;
     final playing = snapshot.status == DhwaniPlaybackStatus.playing;
-    final busy =
-        snapshot.status == DhwaniPlaybackStatus.loading ||
-        snapshot.status == DhwaniPlaybackStatus.buffering ||
-        snapshot.status == DhwaniPlaybackStatus.reconnecting;
+    final busy = snapshot.busy;
+    final failed = _isTerminalPlaybackFailure(snapshot.status);
     return Column(
       children: [
         Row(
@@ -322,14 +313,9 @@ class _PlayerContent extends ConsumerWidget {
               : 164,
           onStation: (next) async {
             HapticFeedback.selectionClick();
-            ref.read(selectedStationProvider.notifier).select(next);
             await ref
-                .read(audioHandlerProvider)
-                .setQueueStations(queue, selected: next);
-            await ref
-                .read(audioHandlerProvider)
-                .selectStation(next, autoplay: playing);
-            await ref.read(catalogueRepositoryProvider).addHistory(next);
+                .read(stationPlaybackControllerProvider)
+                .tune(next, queue: queue, autoplay: playing);
           },
         ),
         SizedBox(
@@ -359,13 +345,9 @@ class _PlayerContent extends ConsumerWidget {
                 tooltip: 'Previous station',
                 icon: Icons.skip_previous_rounded,
                 height: compact ? 64 : 78,
-                onPressed: () async {
-                  await ref.read(audioHandlerProvider).skipToPrevious();
-                  final current = ref.read(audioHandlerProvider).currentStation;
-                  if (current != null) {
-                    ref.read(selectedStationProvider.notifier).select(current);
-                  }
-                },
+                onPressed: () => ref
+                    .read(stationPlaybackControllerProvider)
+                    .previous(autoplay: playing),
               ),
             ),
             const SizedBox(width: 10),
@@ -390,13 +372,9 @@ class _PlayerContent extends ConsumerWidget {
                 tooltip: 'Next station',
                 icon: Icons.skip_next_rounded,
                 height: compact ? 64 : 78,
-                onPressed: () async {
-                  await ref.read(audioHandlerProvider).skipToNext();
-                  final current = ref.read(audioHandlerProvider).currentStation;
-                  if (current != null) {
-                    ref.read(selectedStationProvider.notifier).select(current);
-                  }
-                },
+                onPressed: () => ref
+                    .read(stationPlaybackControllerProvider)
+                    .next(autoplay: playing),
               ),
             ),
           ],
@@ -447,6 +425,8 @@ class _PlayerContent extends ConsumerWidget {
                 ? null
                 : () => playing
                       ? ref.read(audioHandlerProvider).pause()
+                      : failed
+                      ? ref.read(stationPlaybackControllerProvider).retry()
                       : playWithMediaNotification(ref),
             style: FilledButton.styleFrom(
               minimumSize: Size.fromHeight(compact ? 66 : 80),
@@ -471,9 +451,7 @@ class _PlayerContent extends ConsumerWidget {
                     ),
                   )
                 : Icon(
-                    playing
-                        ? Icons.pause_rounded
-                        : Icons.play_arrow_rounded,
+                    playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
                     size: 28,
                   ),
             label: Text(
@@ -481,7 +459,7 @@ class _PlayerContent extends ConsumerWidget {
                   ? _statusLabel(snapshot.status)
                   : playing
                   ? 'Pause'
-                  : snapshot.status == DhwaniPlaybackStatus.error
+                  : failed
                   ? 'Retry'
                   : 'Play live',
               style: const TextStyle(
@@ -508,116 +486,119 @@ class _PlayerContent extends ConsumerWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-          ListTile(
-            leading: const Icon(Icons.timer_outlined),
-            title: const Text('Sleep timer'),
-            onTap: () {
-              Navigator.pop(context);
-              _showSleepTimer(context, ref);
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.volume_up_outlined),
-            title: const Text('Player volume'),
-            onTap: () {
-              Navigator.pop(context);
-              _showVolume(context, ref);
-            },
-          ),
-          if (ref.read(audioHandlerProvider).equalizerSupported)
             ListTile(
-              leading: const Icon(Icons.equalizer_rounded),
-              title: const Text('Equalizer'),
+              leading: const Icon(Icons.timer_outlined),
+              title: const Text('Sleep timer'),
               onTap: () {
                 Navigator.pop(context);
-                _showEqualizer(context, ref);
+                _showSleepTimer(context, ref);
               },
             ),
-          ListTile(
-            leading: const Icon(Icons.info_outline),
-            title: const Text('Station info'),
-            onTap: () {
-              Navigator.pop(context);
-              showStationInfo(context, ref, station, snapshot);
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.share_outlined),
-            title: const Text('Share station'),
-            onTap: () async {
-              Navigator.pop(context);
-              await SharePlus.instance.share(
-                ShareParams(
-                  text:
-                      '${station.name}\n${station.city ?? station.state ?? station.country}\n${station.frequencyDisplay} ${station.frequencySubtitle}\n${station.homepage ?? ''}',
-                ),
-              );
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.content_copy),
-            title: const Text('Copy stream URL'),
-            onTap: () {
-              Clipboard.setData(
-                ClipboardData(
-                  text:
-                      snapshot.stream?.url ??
-                      station.streams.firstOrNull?.url ??
-                      '',
-                ),
-              );
-              Navigator.pop(context);
-            },
-          ),
-          if (station.homepage != null)
             ListTile(
-              leading: const Icon(Icons.open_in_new),
-              title: const Text('Open station website'),
+              leading: const Icon(Icons.volume_up_outlined),
+              title: const Text('Player volume'),
+              onTap: () {
+                Navigator.pop(context);
+                _showVolume(context, ref);
+              },
+            ),
+            if (ref.read(audioHandlerProvider).equalizerSupported)
+              ListTile(
+                leading: const Icon(Icons.equalizer_rounded),
+                title: const Text('Equalizer'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showEqualizer(context, ref);
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.info_outline),
+              title: const Text('Station info'),
+              onTap: () {
+                Navigator.pop(context);
+                showStationInfo(context, ref, station, snapshot);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.share_outlined),
+              title: const Text('Share station'),
               onTap: () async {
                 Navigator.pop(context);
-                final uri = Uri.tryParse(station.homepage!);
-                if (uri != null) await launchUrl(uri);
-              },
-            ),
-          ListTile(
-            leading: const Icon(Icons.directions_car_outlined),
-            title: const Text('Car mode'),
-            onTap: () {
-              Navigator.pop(context);
-              context.push('/car');
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.report_outlined),
-            title: const Text('Report broken'),
-            onTap: () async {
-              await ref.read(databaseProvider).reportBroken(station.id);
-              if (context.mounted) Navigator.pop(context);
-            },
-          ),
-          if (station.userAdded) ...[
-            ListTile(
-              leading: const Icon(Icons.edit_outlined),
-              title: const Text('Edit custom station'),
-              onTap: () {
-                Navigator.pop(context);
-                context.push('/custom-station', extra: station);
+                await SharePlus.instance.share(
+                  ShareParams(
+                    text:
+                        '${station.name}\n${station.city ?? station.state ?? station.country}\n${station.frequencyDisplay} ${station.frequencySubtitle}\n${station.homepage ?? ''}',
+                  ),
+                );
               },
             ),
             ListTile(
-              leading: const Icon(Icons.copy_all_outlined),
-              title: const Text('Duplicate station'),
+              leading: const Icon(Icons.content_copy),
+              title: const Text('Copy stream URL'),
               onTap: () {
+                Clipboard.setData(
+                  ClipboardData(
+                    text:
+                        snapshot.stream?.url ??
+                        station.streams.firstOrNull?.url ??
+                        '',
+                  ),
+                );
                 Navigator.pop(context);
-                context.push('/custom-station?duplicate=true', extra: station);
               },
             ),
+            if (station.homepage != null)
+              ListTile(
+                leading: const Icon(Icons.open_in_new),
+                title: const Text('Open station website'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  final uri = Uri.tryParse(station.homepage!);
+                  if (uri != null) await launchUrl(uri);
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.directions_car_outlined),
+              title: const Text('Car mode'),
+              onTap: () {
+                Navigator.pop(context);
+                context.push('/car');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.report_outlined),
+              title: const Text('Report broken'),
+              onTap: () async {
+                await ref.read(databaseProvider).reportBroken(station.id);
+                if (context.mounted) Navigator.pop(context);
+              },
+            ),
+            if (station.userAdded) ...[
+              ListTile(
+                leading: const Icon(Icons.edit_outlined),
+                title: const Text('Edit custom station'),
+                onTap: () {
+                  Navigator.pop(context);
+                  context.push('/custom-station', extra: station);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.copy_all_outlined),
+                title: const Text('Duplicate station'),
+                onTap: () {
+                  Navigator.pop(context);
+                  context.push(
+                    '/custom-station?duplicate=true',
+                    extra: station,
+                  );
+                },
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     ),
-  ),
-);
+  );
 }
 
 class _BandMenu extends ConsumerWidget {
@@ -866,7 +847,8 @@ class _RecordButtonState extends ConsumerState<_RecordButton>
     final isRecording = status == RecordingStatus.recording;
     final isBusy =
         status == RecordingStatus.starting ||
-        status == RecordingStatus.stopping;
+        status == RecordingStatus.stopping ||
+        status == RecordingStatus.finalizing;
     final active = isRecording || isBusy;
 
     return Tooltip(
@@ -925,21 +907,42 @@ class _RecordButtonState extends ConsumerState<_RecordButton>
                             HapticFeedback.heavyImpact();
                             await ref.read(recordingServiceProvider).stop();
                           } else {
-                            final stream =
-                                widget.snapshot.stream ??
-                                widget.station.rankedStreams.firstOrNull;
-                            if (stream == null) {
-                              throw StateError('No stream mapped');
+                            final stream = widget.snapshot.stream;
+                            final confirmedLive =
+                                widget.snapshot.status ==
+                                    DhwaniPlaybackStatus.playing &&
+                                widget.snapshot.station?.id ==
+                                    widget.station.id &&
+                                stream != null;
+                            if (!confirmedLive) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Start live playback before recording.',
+                                  ),
+                                ),
+                              );
+                              return;
                             }
                             HapticFeedback.mediumImpact();
                             await ref
                                 .read(recordingServiceProvider)
                                 .start(widget.station, stream);
                           }
-                        } catch (error) {
+                        } catch (_) {
                           if (context.mounted) {
+                            final message = ref
+                                .read(recordingServiceProvider)
+                                .state
+                                .value
+                                .message;
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('$error')),
+                              SnackBar(
+                                content: Text(
+                                  message ??
+                                      'Recording could not be completed.',
+                                ),
+                              ),
                             );
                           }
                         }
@@ -1290,8 +1293,18 @@ void showStationInfo(
                     ];
                     final alternate = station.copyWith(streams: alternatives);
                     await ref
-                        .read(audioHandlerProvider)
-                        .selectStation(alternate, autoplay: true);
+                        .read(stationPlaybackControllerProvider)
+                        .tune(
+                          alternate,
+                          queue: [
+                            alternate,
+                            ...ref
+                                .read(audioHandlerProvider)
+                                .queueStations
+                                .where((item) => item.id != alternate.id),
+                          ],
+                          autoplay: true,
+                        );
                     if (context.mounted) Navigator.pop(context);
                   },
                   icon: const Icon(Icons.swap_horiz_rounded),
@@ -1510,14 +1523,28 @@ void _showEqualizer(BuildContext context, WidgetRef ref) {
 
 String _statusLabel(DhwaniPlaybackStatus status) => switch (status) {
   DhwaniPlaybackStatus.idle => 'Ready',
+  DhwaniPlaybackStatus.selected => 'Ready',
+  DhwaniPlaybackStatus.switching => 'Switching…',
+  DhwaniPlaybackStatus.connecting => 'Connecting…',
   DhwaniPlaybackStatus.loading => 'Connecting…',
   DhwaniPlaybackStatus.ready => 'Ready',
   DhwaniPlaybackStatus.buffering => 'Buffering…',
   DhwaniPlaybackStatus.playing => 'Live',
   DhwaniPlaybackStatus.paused => 'Paused',
   DhwaniPlaybackStatus.reconnecting => 'Reconnecting…',
+  DhwaniPlaybackStatus.offline => 'Offline',
+  DhwaniPlaybackStatus.geoBlocked => 'Unavailable here',
+  DhwaniPlaybackStatus.unsupported => 'Unsupported stream',
+  DhwaniPlaybackStatus.unavailable => 'Unavailable',
   DhwaniPlaybackStatus.error => 'Unavailable',
 };
+
+bool _isTerminalPlaybackFailure(DhwaniPlaybackStatus? status) =>
+    status == DhwaniPlaybackStatus.error ||
+    status == DhwaniPlaybackStatus.unavailable ||
+    status == DhwaniPlaybackStatus.offline ||
+    status == DhwaniPlaybackStatus.geoBlocked ||
+    status == DhwaniPlaybackStatus.unsupported;
 
 String _duration(Duration duration) =>
     '${duration.inHours > 0 ? '${duration.inHours.toString().padLeft(2, '0')}:' : ''}${duration.inMinutes.remainder(60).toString().padLeft(2, '0')}:${duration.inSeconds.remainder(60).toString().padLeft(2, '0')}';

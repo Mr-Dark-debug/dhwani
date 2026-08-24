@@ -174,12 +174,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     FocusManager.instance.primaryFocus?.unfocus();
     await SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
     await _remember(query);
-    ref.read(selectedStationProvider.notifier).select(station);
     await ref
-        .read(audioHandlerProvider)
-        .setQueueStations(results, selected: station);
-    await ref.read(audioHandlerProvider).selectStation(station);
-    await ref.read(catalogueRepositoryProvider).addHistory(station);
+        .read(stationPlaybackControllerProvider)
+        .tune(station, queue: results);
     if (mounted) context.go('/radio');
   }
 }

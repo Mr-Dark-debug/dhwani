@@ -12,7 +12,7 @@ import 'package:integration_test/integration_test.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('real MP3 stream reaches playing and pauses', (tester) async {
+  testWidgets('real live stream reaches playing and pauses', (tester) async {
     await app.main();
     await tester.pumpAndSettle(const Duration(seconds: 2));
     final container = ProviderScope.containerOf(
@@ -27,7 +27,10 @@ void main() {
         .firstWhere((value) => value.status == DhwaniPlaybackStatus.playing)
         .timeout(const Duration(seconds: 30));
     expect(playing.station?.id, _swissJazz.id);
-    expect(playing.stream?.url, _swissJazz.streams.single.url);
+    expect(
+      _swissJazz.streams.map((stream) => stream.url),
+      contains(playing.stream?.url),
+    );
 
     await audio.pause();
     final paused = await audio.snapshot
@@ -49,6 +52,11 @@ const _swissJazz = RadioStation(
       url: 'https://stream.srg-ssr.ch/m/rsj/mp3_128',
       codec: 'MP3',
       bitrate: 128,
+    ),
+    StationStream(
+      url: 'https://stream.srg-ssr.ch/rsj/aacp_96.m3u',
+      codec: 'AAC',
+      bitrate: 96,
     ),
   ],
   languages: ['German'],

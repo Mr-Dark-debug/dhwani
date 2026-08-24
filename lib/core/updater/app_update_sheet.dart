@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,7 +5,14 @@ import 'package:flutter/services.dart';
 import '../../app/theme/dhwani_theme.dart';
 import 'app_update_service.dart';
 
-enum _UpdateStep { idle, downloading, downloaded, permissionRequired, error }
+enum _UpdateStep {
+  idle,
+  downloading,
+  downloaded,
+  permissionRequired,
+  installerOpened,
+  error,
+}
 
 class AppUpdateSheet extends StatefulWidget {
   const AppUpdateSheet({
@@ -27,10 +33,8 @@ class AppUpdateSheet extends StatefulWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => AppUpdateSheet(
-        release: release,
-        updateService: updateService,
-      ),
+      builder: (context) =>
+          AppUpdateSheet(release: release, updateService: updateService),
     );
   }
 
@@ -98,19 +102,38 @@ class _AppUpdateSheetState extends State<AppUpdateSheet>
 
       _downloadedPath = file.path;
       await _checkPermissionAndInstall();
-    } catch (e) {
+    } on DioException catch (error) {
+      if (CancelToken.isCancel(error)) {
+        if (mounted) setState(() => _step = _UpdateStep.idle);
+        return;
+      }
       if (mounted) {
         setState(() {
           _step = _UpdateStep.error;
-          _errorMessage = e.toString();
+          _errorMessage =
+              'The update download failed. Check the connection and retry.';
+        });
+      }
+    } on UpdateVerificationException catch (error) {
+      if (mounted) {
+        setState(() {
+          _step = _UpdateStep.error;
+          _errorMessage = error.message;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _step = _UpdateStep.error;
+          _errorMessage = 'The downloaded update could not be verified.';
         });
       }
     }
   }
 
   Future<void> _checkPermissionAndInstall() async {
-    final hasPermission =
-        await widget.updateService.canRequestPackageInstalls();
+    final hasPermission = await widget.updateService
+        .canRequestPackageInstalls();
 
     if (!mounted) return;
 
@@ -126,7 +149,16 @@ class _AppUpdateSheetState extends State<AppUpdateSheet>
     });
 
     if (_downloadedPath != null) {
-      await widget.updateService.installApk(_downloadedPath!);
+      final opened = await widget.updateService.installApk(_downloadedPath!);
+      if (!mounted) return;
+      setState(() {
+        if (opened) {
+          _step = _UpdateStep.installerOpened;
+        } else {
+          _step = _UpdateStep.error;
+          _errorMessage = 'Android could not open the package installer.';
+        }
+      });
     }
   }
 
@@ -231,8 +263,9 @@ class _AppUpdateSheetState extends State<AppUpdateSheet>
                               Text(
                                 widget.release.formattedSize,
                                 style: TextStyle(
-                                  color: theme.colorScheme.onSurface
-                                      .withValues(alpha: .6),
+                                  color: theme.colorScheme.onSurface.withValues(
+                                    alpha: .6,
+                                  ),
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -282,7 +315,9 @@ class _AppUpdateSheetState extends State<AppUpdateSheet>
                           ? widget.release.notes
                           : widget.release.title,
                       style: TextStyle(
-                        color: theme.colorScheme.onSurface.withValues(alpha: .9),
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: .9,
+                        ),
                         fontSize: 13,
                         height: 1.45,
                       ),
@@ -325,8 +360,9 @@ class _AppUpdateSheetState extends State<AppUpdateSheet>
                       child: LinearProgressIndicator(
                         value: _progress > 0 ? _progress : null,
                         minHeight: 8,
-                        backgroundColor:
-                            theme.colorScheme.onSurface.withValues(alpha: .08),
+                        backgroundColor: theme.colorScheme.onSurface.withValues(
+                          alpha: .08,
+                        ),
                         valueColor: const AlwaysStoppedAnimation<Color>(
                           DhwaniColors.signal,
                         ),
@@ -337,8 +373,9 @@ class _AppUpdateSheetState extends State<AppUpdateSheet>
                       Text(
                         '${_formatBytes(_receivedBytes)} of ${_formatBytes(_totalBytes)}',
                         style: TextStyle(
-                          color: theme.colorScheme.onSurface
-                              .withValues(alpha: .55),
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: .55,
+                          ),
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
                         ),
@@ -412,6 +449,14 @@ class _AppUpdateSheetState extends State<AppUpdateSheet>
                       ),
                     ],
                   ),
+                ),
+                const SizedBox(height: 16),
+              ],
+
+              if (_step == _UpdateStep.installerOpened) ...[
+                const Text(
+                  'Android’s installer is open. The update is complete only after Android confirms installation.',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 16),
               ],
@@ -511,6 +556,14 @@ class _AppUpdateSheetState extends State<AppUpdateSheet>
                         widget.updateService.installApk(_downloadedPath!);
                       }
                     },
+                  ),
+                ),
+              ] else if (_step == _UpdateStep.installerOpened) ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Close'),
                   ),
                 ),
               ] else if (_step == _UpdateStep.downloading) ...[

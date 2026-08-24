@@ -2,11 +2,16 @@ package com.prashant.dhwani
 
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageInfo
+import android.content.pm.PackageManager
+import android.content.pm.Signature
+import android.os.Build
 import android.net.Uri
 import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
+import java.security.MessageDigest
 
 class MainActivity : AudioServiceActivity() {
     private val channelName = "com.prashant.dhwani/files"
@@ -67,6 +72,45 @@ class MainActivity : AudioServiceActivity() {
                             result.success(true)
                         }
                     }
+                    "inspectApk" -> {
+                        val path = call.argument<String>("path")
+                        val file = path?.let(::File)
+                        if (file == null || !file.isFile || file.length() <= 0L) {
+                            result.error("invalid_apk", "The APK file is unavailable.", null)
+                            return@setMethodCallHandler
+                        }
+                        try {
+                            val archive = packageArchiveInfo(file.absolutePath)
+                            if (archive == null) {
+                                result.success(mapOf("archiveValid" to false))
+                                return@setMethodCallHandler
+                            }
+                            val installed = installedPackageInfo()
+                            val archiveSigners = signers(archive)
+                            val installedSigners = signers(installed)
+                            val archiveHashes = archiveSigners.map(::sha256).sorted()
+                            val installedHashes = installedSigners.map(::sha256).toSet()
+                            result.success(
+                                mapOf(
+                                    "archiveValid" to archiveSigners.isNotEmpty(),
+                                    "packageName" to archive.packageName,
+                                    "versionName" to (archive.versionName ?: ""),
+                                    "versionCode" to if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                                        archive.longVersionCode
+                                    } else {
+                                        @Suppress("DEPRECATION") archive.versionCode.toLong()
+                                    },
+                                    "signerSha256" to archiveHashes,
+                                    "signatureMatchesCurrent" to (
+                                        archiveHashes.isNotEmpty() &&
+                                        archiveHashes.all { installedHashes.contains(it) }
+                                    ),
+                                ),
+                            )
+                        } catch (error: Exception) {
+                            result.error("inspect_error", "Android could not inspect the APK.", null)
+                        }
+                    }
                     "installApk" -> {
                         val path = call.argument<String>("path")
                         val file = path?.let(::File)
@@ -120,4 +164,48 @@ class MainActivity : AudioServiceActivity() {
             source.inputStream().use { input -> input.copyTo(output) }
         }
     }
+
+    @Suppress("DEPRECATION")
+    private fun packageArchiveInfo(path: String): PackageInfo? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            packageManager.getPackageArchiveInfo(
+                path,
+                PackageManager.PackageInfoFlags.of(
+                    PackageManager.GET_SIGNING_CERTIFICATES.toLong(),
+                ),
+            )
+        } else {
+            packageManager.getPackageArchiveInfo(path, PackageManager.GET_SIGNING_CERTIFICATES)
+        }
+
+    @Suppress("DEPRECATION")
+    private fun installedPackageInfo(): PackageInfo =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            packageManager.getPackageInfo(
+                packageName,
+                PackageManager.PackageInfoFlags.of(
+                    PackageManager.GET_SIGNING_CERTIFICATES.toLong(),
+                ),
+            )
+        } else {
+            packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES)
+        }
+
+    @Suppress("DEPRECATION")
+    private fun signers(info: PackageInfo): Array<Signature> =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            val signingInfo = info.signingInfo ?: return emptyArray()
+            if (signingInfo.hasMultipleSigners()) {
+                signingInfo.apkContentsSigners
+            } else {
+                signingInfo.signingCertificateHistory
+            }
+        } else {
+            info.signatures ?: emptyArray()
+        }
+
+    private fun sha256(signature: Signature): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest(signature.toByteArray())
+            .joinToString("") { byte -> "%02X".format(byte) }
 }

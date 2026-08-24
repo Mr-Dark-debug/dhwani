@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -225,11 +226,23 @@ class _CountryList extends ConsumerWidget {
             ...recentCodes.where((code) => code != country.code),
           ].take(5).toList(),
         );
-        await ref
-            .read(catalogueRepositoryProvider)
-            .loadCountry(country.code)
-            .catchError((_) {});
         if (!context.mounted) return;
+        unawaited(
+          ref
+              .read(catalogueRepositoryProvider)
+              .loadCountry(country.code)
+              .catchError((Object _) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'The live directory is unavailable. Showing cached stations.',
+                      ),
+                    ),
+                  );
+                }
+              }),
+        );
         context.push(
           country.code == 'IN'
               ? '/states?country=IN'
@@ -660,21 +673,14 @@ class _StationListScreenState extends ConsumerState<StationListScreen> {
     RadioStation station,
     List<RadioStation> all,
   ) async {
-    ref.read(selectedStationProvider.notifier).select(station);
     final queue = tuningQueue(
       all,
       current: station,
       preferredScope: ref.read(settingsProvider).defaultScope,
     );
     await ref
-        .read(audioHandlerProvider)
-        .setQueueStations(queue, selected: station);
-    await ref.read(audioHandlerProvider).selectStation(station);
-    await ref.read(catalogueRepositoryProvider).addHistory(station);
-    await ref.read(preferencesProvider).setBool('onboardingComplete', true);
-    await ref
-        .read(preferencesProvider)
-        .setString('lastStation', station.encode());
+        .read(stationPlaybackControllerProvider)
+        .tune(station, queue: queue);
     if (context.mounted) context.go('/radio');
   }
 }

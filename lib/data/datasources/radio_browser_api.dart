@@ -33,6 +33,7 @@ class RadioBrowserApi {
   final Random _random = Random();
   List<String> _servers = const [];
   DateTime? _serversAt;
+  final Map<String, _MirrorHealth> _mirrorHealth = {};
 
   Future<List<String>> discoverServers({bool force = false}) async {
     if (!force &&
@@ -90,16 +91,40 @@ class RadioBrowserApi {
   Future<List<RadioStation>> popular({int limit = 250}) =>
       _stations('/json/stations/topclick/$limit');
 
-  Future<List<RadioStation>> byCountry(String countryCode, {int limit = 500}) =>
-      _stations(
+  Future<List<RadioStation>> byCountry(
+    String countryCode, {
+    int limit = 500,
+    int maxStations = 10000,
+    Future<void> Function(List<RadioStation> page)? onPage,
+    CancelToken? cancelToken,
+  }) async {
+    final pageSize = limit.clamp(50, 500);
+    final result = <String, RadioStation>{};
+    final started = DateTime.now();
+    var offset = 0;
+    while (result.length < maxStations &&
+        DateTime.now().difference(started) < const Duration(seconds: 45)) {
+      if (cancelToken?.isCancelled == true) throw cancelToken!.cancelError!;
+      final page = await _stations(
         '/json/stations/bycountrycodeexact/${countryCode.toUpperCase()}',
         query: {
           'hidebroken': 'true',
           'order': 'clickcount',
           'reverse': 'true',
-          'limit': '$limit',
+          'limit': '$pageSize',
+          'offset': '$offset',
         },
+        cancelToken: cancelToken,
       );
+      for (final station in page) {
+        result[station.id] = station;
+      }
+      if (page.isNotEmpty) await onPage?.call(page);
+      if (page.length < pageSize) break;
+      offset += pageSize;
+    }
+    return result.values.take(maxStations).toList();
+  }
 
   Future<List<RadioStation>> search(String query, {int limit = 100}) =>
       _stations(
@@ -125,8 +150,9 @@ class RadioBrowserApi {
   Future<List<RadioStation>> _stations(
     String path, {
     Map<String, Object?>? query,
+    CancelToken? cancelToken,
   }) async {
-    final data = await _getList(path, query: query);
+    final data = await _getList(path, query: query, cancelToken: cancelToken);
     return data
         .map(RadioStation.fromRadioBrowser)
         .where((station) => station.id != 'rb:null' && station.canPlay)
@@ -136,8 +162,9 @@ class RadioBrowserApi {
   Future<List<Map<String, Object?>>> _getList(
     String path, {
     Map<String, Object?>? query,
+    CancelToken? cancelToken,
   }) async {
-    final response = await _get(path, query: query);
+    final response = await _get(path, query: query, cancelToken: cancelToken);
     final data = response.data;
     if (data is! List) {
       throw const FormatException('Radio Browser returned a non-list response');
@@ -151,24 +178,98 @@ class RadioBrowserApi {
   Future<Response<Object?>> _get(
     String path, {
     Map<String, Object?>? query,
+    CancelToken? cancelToken,
   }) async {
     final servers = await discoverServers();
     Object? lastError;
-    for (final server in servers.take(4)) {
+    final now = DateTime.now();
+    final ordered = [...servers]
+      ..sort((a, b) {
+        final aHealth = _mirrorHealth[a] ?? const _MirrorHealth();
+        final bHealth = _mirrorHealth[b] ?? const _MirrorHealth();
+        final aBlocked = aHealth.retryAfter?.isAfter(now) == true;
+        final bBlocked = bHealth.retryAfter?.isAfter(now) == true;
+        if (aBlocked != bBlocked) return aBlocked ? 1 : -1;
+        final failures = aHealth.failures.compareTo(bHealth.failures);
+        if (failures != 0) return failures;
+        return aHealth.averageLatencyMs.compareTo(bHealth.averageLatencyMs);
+      });
+    for (final server in ordered.take(4)) {
+      if (cancelToken?.isCancelled == true) throw cancelToken!.cancelError!;
+      final health = _mirrorHealth[server] ?? const _MirrorHealth();
+      if (health.retryAfter?.isAfter(DateTime.now()) == true &&
+          ordered.any(
+            (candidate) =>
+                (_mirrorHealth[candidate]?.retryAfter?.isAfter(
+                      DateTime.now(),
+                    ) ??
+                    false) ==
+                false,
+          )) {
+        continue;
+      }
+      final stopwatch = Stopwatch()..start();
       try {
-        return await _dio.get<Object?>('$server$path', queryParameters: query);
+        final response = await _dio.get<Object?>(
+          '$server$path',
+          queryParameters: query,
+          cancelToken: cancelToken,
+        );
+        stopwatch.stop();
+        _mirrorHealth[server] = health.succeeded(stopwatch.elapsedMilliseconds);
+        return response;
       } catch (error, stack) {
+        stopwatch.stop();
+        if (error is DioException && CancelToken.isCancel(error)) rethrow;
         lastError = error;
+        _mirrorHealth[server] = health.failed();
         DhwaniLog.api(
-          '$server failed for $path; trying next mirror',
+          '${Uri.parse(server).host} failed for $path; trying next mirror',
           error,
           stack,
         );
       }
     }
-    throw StateError('All Radio Browser mirrors failed: $lastError');
+    DhwaniLog.api('All Radio Browser mirrors failed for $path', lastError);
+    throw const RadioDirectoryException(
+      'The station directory is temporarily unavailable. Cached stations remain usable.',
+    );
   }
 
   static int _int(Object? value) =>
       value is num ? value.toInt() : int.tryParse('$value') ?? 0;
+}
+
+class RadioDirectoryException implements Exception {
+  const RadioDirectoryException(this.message);
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
+class _MirrorHealth {
+  const _MirrorHealth({
+    this.failures = 0,
+    this.averageLatencyMs = 1000,
+    this.retryAfter,
+  });
+
+  final int failures;
+  final int averageLatencyMs;
+  final DateTime? retryAfter;
+
+  _MirrorHealth succeeded(int latencyMs) => _MirrorHealth(
+    averageLatencyMs: ((averageLatencyMs * 2) + latencyMs) ~/ 3,
+  );
+
+  _MirrorHealth failed() {
+    final nextFailures = failures + 1;
+    final seconds = min(60, 1 << min(nextFailures, 5));
+    return _MirrorHealth(
+      failures: nextFailures,
+      averageLatencyMs: averageLatencyMs,
+      retryAfter: DateTime.now().add(Duration(seconds: seconds)),
+    );
+  }
 }

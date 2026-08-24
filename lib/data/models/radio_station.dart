@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+const _copySentinel = Object();
+
 enum RadioBand { am, fm, net }
 
 enum RadioSourceType { internetStream, remoteRfReceiver, localRecording }
@@ -10,8 +12,11 @@ enum StationHealth {
   unknown,
   checking,
   online,
+  recentlyWorking,
   unstable,
   offline,
+  unavailableHere,
+  directoryBroken,
   geoBlocked,
   unsupported,
 }
@@ -22,16 +27,22 @@ class StationStream {
     this.codec,
     this.bitrate,
     this.hls = false,
+    this.lastAttempt,
     this.lastSuccess,
     this.failureCount = 0,
+    this.lastFailureReason,
+    this.lastStartupMs,
   });
 
   final String url;
   final String? codec;
   final int? bitrate;
   final bool hls;
+  final DateTime? lastAttempt;
   final DateTime? lastSuccess;
   final int failureCount;
+  final String? lastFailureReason;
+  final int? lastStartupMs;
 
   bool get isSecure => Uri.tryParse(url)?.scheme == 'https';
 
@@ -40,8 +51,11 @@ class StationStream {
     'codec': codec,
     'bitrate': bitrate,
     'hls': hls,
+    'lastAttempt': lastAttempt?.toIso8601String(),
     'lastSuccess': lastSuccess?.toIso8601String(),
     'failureCount': failureCount,
+    'lastFailureReason': lastFailureReason,
+    'lastStartupMs': lastStartupMs,
   };
 
   factory StationStream.fromJson(Map<String, Object?> json) => StationStream(
@@ -49,19 +63,32 @@ class StationStream {
     codec: json['codec'] as String?,
     bitrate: (json['bitrate'] as num?)?.toInt(),
     hls: json['hls'] as bool? ?? false,
+    lastAttempt: DateTime.tryParse(json['lastAttempt'] as String? ?? ''),
     lastSuccess: DateTime.tryParse(json['lastSuccess'] as String? ?? ''),
     failureCount: (json['failureCount'] as num?)?.toInt() ?? 0,
+    lastFailureReason: json['lastFailureReason'] as String?,
+    lastStartupMs: (json['lastStartupMs'] as num?)?.toInt(),
   );
 
-  StationStream copyWith({DateTime? lastSuccess, int? failureCount}) =>
-      StationStream(
-        url: url,
-        codec: codec,
-        bitrate: bitrate,
-        hls: hls,
-        lastSuccess: lastSuccess ?? this.lastSuccess,
-        failureCount: failureCount ?? this.failureCount,
-      );
+  StationStream copyWith({
+    DateTime? lastAttempt,
+    DateTime? lastSuccess,
+    int? failureCount,
+    Object? lastFailureReason = _copySentinel,
+    int? lastStartupMs,
+  }) => StationStream(
+    url: url,
+    codec: codec,
+    bitrate: bitrate,
+    hls: hls,
+    lastAttempt: lastAttempt ?? this.lastAttempt,
+    lastSuccess: lastSuccess ?? this.lastSuccess,
+    failureCount: failureCount ?? this.failureCount,
+    lastFailureReason: identical(lastFailureReason, _copySentinel)
+        ? this.lastFailureReason
+        : lastFailureReason as String?,
+    lastStartupMs: lastStartupMs ?? this.lastStartupMs,
+  );
 }
 
 class RadioStation {
@@ -89,6 +116,9 @@ class RadioStation {
     this.health = StationHealth.unknown,
     this.lastChecked,
     this.lastSuccessfulPlayback,
+    this.lastResolvedStreamUrl,
+    this.lastFailureReason,
+    this.lastStartupMs,
     this.failureCount = 0,
     this.userAdded = false,
     this.notes,
@@ -119,6 +149,9 @@ class RadioStation {
   final StationHealth health;
   final DateTime? lastChecked;
   final DateTime? lastSuccessfulPlayback;
+  final String? lastResolvedStreamUrl;
+  final String? lastFailureReason;
+  final int? lastStartupMs;
   final int failureCount;
   final bool userAdded;
   final String? notes;
@@ -175,6 +208,9 @@ class RadioStation {
     StationHealth? health,
     DateTime? lastChecked,
     DateTime? lastSuccessfulPlayback,
+    String? lastResolvedStreamUrl,
+    Object? lastFailureReason = _copySentinel,
+    int? lastStartupMs,
     int? failureCount,
     String? name,
     String? state,
@@ -206,6 +242,11 @@ class RadioStation {
     lastChecked: lastChecked ?? this.lastChecked,
     lastSuccessfulPlayback:
         lastSuccessfulPlayback ?? this.lastSuccessfulPlayback,
+    lastResolvedStreamUrl: lastResolvedStreamUrl ?? this.lastResolvedStreamUrl,
+    lastFailureReason: identical(lastFailureReason, _copySentinel)
+        ? this.lastFailureReason
+        : lastFailureReason as String?,
+    lastStartupMs: lastStartupMs ?? this.lastStartupMs,
     failureCount: failureCount ?? this.failureCount,
     userAdded: userAdded ?? this.userAdded,
     notes: notes ?? this.notes,
@@ -237,6 +278,9 @@ class RadioStation {
     'health': health.name,
     'lastChecked': lastChecked?.toIso8601String(),
     'lastSuccessfulPlayback': lastSuccessfulPlayback?.toIso8601String(),
+    'lastResolvedStreamUrl': lastResolvedStreamUrl,
+    'lastFailureReason': lastFailureReason,
+    'lastStartupMs': lastStartupMs,
     'failureCount': failureCount,
     'userAdded': userAdded,
     'notes': notes,
@@ -284,6 +328,9 @@ class RadioStation {
     lastSuccessfulPlayback: DateTime.tryParse(
       json['lastSuccessfulPlayback'] as String? ?? '',
     ),
+    lastResolvedStreamUrl: json['lastResolvedStreamUrl'] as String?,
+    lastFailureReason: json['lastFailureReason'] as String?,
+    lastStartupMs: (json['lastStartupMs'] as num?)?.toInt(),
     failureCount: (json['failureCount'] as num?)?.toInt() ?? 0,
     userAdded: json['userAdded'] as bool? ?? false,
     notes: json['notes'] as String?,

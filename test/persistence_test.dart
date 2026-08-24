@@ -56,6 +56,15 @@ void main() {
     expect(await database.watchHistorySummaries().first, isEmpty);
   });
 
+  test('one confirmed playback session updates one history row', () async {
+    final sessionId = await database.startHistorySession(station);
+    await database.updateHistorySession(sessionId, const Duration(seconds: 12));
+
+    final summary = (await database.watchHistorySummaries().first).single;
+    expect(summary.playCount, 1);
+    expect(summary.totalDuration, const Duration(seconds: 12));
+  });
+
   test('favourites can be reordered without losing flags', () async {
     final second = station.copyWith(name: 'Patna');
     final secondStation = RadioStation.fromJson({
@@ -98,6 +107,23 @@ void main() {
     expect(updated.health, StationHealth.online);
     expect(updated.lastSuccessfulPlayback, isNotNull);
     expect(updated.streams.single.lastSuccess, isNotNull);
+    expect(updated.lastResolvedStreamUrl, station.streams.single.url);
+    expect(updated.lastFailureReason, isNull);
+  });
+
+  test('regional failure is not persisted as globally offline', () async {
+    await database.upsertStations([station]);
+    await database.recordStreamResult(
+      station,
+      station.streams.single.url,
+      success: false,
+      failureReason: 'geoBlocked',
+    );
+
+    final updated = (await database.allStations()).single;
+    expect(updated.health, StationHealth.unavailableHere);
+    expect(updated.health, isNot(StationHealth.offline));
+    expect(updated.lastFailureReason, 'geoBlocked');
   });
 
   test('backup format is versioned and contains only user data', () async {

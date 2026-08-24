@@ -13,7 +13,7 @@ void main() {
     await app.main();
     await tester.pumpAndSettle(const Duration(seconds: 4));
 
-    await tester.tap(find.text('Saved').last);
+    await tester.tap(find.byKey(const Key('nav-saved')));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Add custom station'));
     await tester.pumpAndSettle();
@@ -37,9 +37,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Dadaji Radio'), findsOneWidget);
 
-    await tester.tap(find.text('Discover').last);
+    await tester.tap(find.byKey(const Key('nav-discover')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Saved').last);
+    await tester.tap(find.byKey(const Key('nav-saved')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Custom'));
     await tester.pumpAndSettle();

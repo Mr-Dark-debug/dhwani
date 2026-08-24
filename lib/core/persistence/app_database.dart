@@ -144,6 +144,15 @@ class AppDatabase extends _$AppDatabase {
           ))
           .go();
 
+  Future<int> pruneStaleCatalogue(DateTime cutoff) =>
+      (delete(stations)..where(
+            (row) =>
+                row.custom.equals(false) &
+                row.favourite.equals(false) &
+                row.updatedAt.isSmallerThanValue(cutoff),
+          ))
+          .go();
+
   Future<void> upsertStations(Iterable<RadioStation> values) async {
     final now = DateTime.now();
     await batch((batch) {
@@ -253,6 +262,27 @@ class AppDatabase extends _$AppDatabase {
     ),
   );
 
+  /// Starts one durable listening session after playback is confirmed.
+  ///
+  /// The returned row id is updated when the session pauses, stops, switches,
+  /// or fails. This prevents navigation taps and failed connection attempts
+  /// from inflating listening history.
+  Future<int> startHistorySession(RadioStation station) =>
+      into(historyItems).insert(
+        HistoryItemsCompanion.insert(
+          stationId: station.id,
+          stationPayload: station.encode(),
+          playedAt: DateTime.now(),
+        ),
+      );
+
+  Future<void> updateHistorySession(int rowId, Duration duration) =>
+      (update(historyItems)..where((row) => row.rowId.equals(rowId))).write(
+        HistoryItemsCompanion(
+          durationSeconds: Value(duration.inSeconds.clamp(0, 1 << 31)),
+        ),
+      );
+
   Future<void> importHistory(
     RadioStation station,
     DateTime playedAt, {
@@ -354,33 +384,59 @@ class AppDatabase extends _$AppDatabase {
     RadioStation station,
     String streamUrl, {
     required bool success,
+    String? failureReason,
+    Duration? startupTime,
   }) async {
     final now = DateTime.now();
-    final streams = station.streams
-        .map(
-          (stream) => stream.url == streamUrl
-              ? stream.copyWith(
-                  lastSuccess: success ? now : stream.lastSuccess,
-                  failureCount: success ? 0 : stream.failureCount + 1,
-                )
-              : stream,
-        )
-        .toList();
-    final failures = success ? 0 : station.failureCount + 1;
-    final updated = station.copyWith(
-      streams: streams,
-      health: success
-          ? StationHealth.online
-          : failures >= 3
-          ? StationHealth.offline
-          : StationHealth.unstable,
-      lastChecked: now,
-      lastSuccessfulPlayback: success ? now : station.lastSuccessfulPlayback,
-      failureCount: failures,
-    );
     final existing = await (select(
       stations,
     )..where((row) => row.id.equals(station.id))).getSingleOrNull();
+    final base = existing == null
+        ? station
+        : RadioStation.decode(existing.payload);
+    final incomingByUrl = {
+      for (final stream in station.streams) stream.url: stream,
+    };
+    final allStreams = <StationStream>[
+      ...base.streams,
+      ...station.streams.where(
+        (candidate) =>
+            !base.streams.any((persisted) => persisted.url == candidate.url),
+      ),
+    ];
+    final streams = allStreams
+        .map(
+          (stream) => stream.url == streamUrl
+              ? stream.copyWith(
+                  lastAttempt: now,
+                  lastSuccess: success ? now : stream.lastSuccess,
+                  failureCount: success ? 0 : stream.failureCount + 1,
+                  lastFailureReason: success ? null : failureReason,
+                  lastStartupMs: startupTime?.inMilliseconds,
+                )
+              : incomingByUrl[stream.url] ?? stream,
+        )
+        .toList();
+    final failures = success ? 0 : base.failureCount + 1;
+    final recentlySuccessful =
+        base.lastSuccessfulPlayback != null &&
+        now.difference(base.lastSuccessfulPlayback!) < const Duration(days: 1);
+    final failureHealth = switch (failureReason) {
+      'geoBlocked' || 'unauthorized' => StationHealth.unavailableHere,
+      'notFound' => StationHealth.directoryBroken,
+      _ when recentlySuccessful => StationHealth.recentlyWorking,
+      _ => StationHealth.unstable,
+    };
+    final updated = base.copyWith(
+      streams: streams,
+      health: success ? StationHealth.online : failureHealth,
+      lastChecked: now,
+      lastSuccessfulPlayback: success ? now : base.lastSuccessfulPlayback,
+      lastResolvedStreamUrl: success ? streamUrl : base.lastResolvedStreamUrl,
+      lastFailureReason: success ? null : failureReason,
+      lastStartupMs: startupTime?.inMilliseconds,
+      failureCount: failures,
+    );
     if (existing == null) {
       await upsertStations([updated]);
       return;
