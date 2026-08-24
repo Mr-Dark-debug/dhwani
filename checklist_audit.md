@@ -35,7 +35,7 @@ This is the living, requirement-by-requirement acceptance ledger for the origina
 | 29 | Playback engine | PASS | One just_audio/audio_service/audio_session authority; real MP3/HLS smoke. |
 | 30 | Play/pause behavior | PASS | Immediate red/black/neutral visual states. |
 | 31 | No silent failure | PASS | Error detail, retry, fallback, next, info. |
-| 32 | Stream failover | PASS | Ranked finite alternatives and 15-second per-source startup bound. |
+| 32 | Stream failover | PASS | Ranked finite alternatives, 10-second per-source and 24-second station budget. |
 | 33 | Android background audio | PASS | Typed media FGS, notification/media session and transport actions. |
 | 34 | Pixel background test | PASS | Home/background/notification pause-resume/restore and dumpsys evidence. |
 | 35 | Audio focus | PASS | Music focus, interruptions and noisy-device pause. |
@@ -46,7 +46,7 @@ This is the living, requirement-by-requirement acceptance ledger for the origina
 | 40 | Custom stations | PASS | Create/edit/delete/duplicate/favourite/play/test/share/record pathways. |
 | 41 | RF reference without stream | PASS | Saves metadata and exposes Find/Add stream behavior without fake play. |
 | 42 | Network-stream recording | PASS | FFmpeg stream copy; no microphone permission; live REC timer. |
-| 43 | Recording research/licensing | PASS | Current maintained audio-only LGPL fork documented. |
+| 43 | Recording research/licensing | PASS | Current maintained full non-GPL/LGPL fork retained after audio-only HTTPS failure. |
 | 44 | Recording output validation | PASS | Sanitized name, nonzero file, FFprobe duration/format validation. |
 | 45 | Record while listening | PASS | Independent capture connection coexists; errors remain honest. |
 | 46 | Recordings library | PASS | Play/pause/seek, rename, share, SAF export, delete and details. |
@@ -76,7 +76,7 @@ This is the living, requirement-by-requirement acceptance ledger for the origina
 | 70 | Cache | PASS | Timestamped merged catalogue and stale-safe startup. |
 | 71 | API abstraction | PASS | Radio Browser/Akashvani/local sources behind repository. |
 | 72 | Network resilience | PASS | Timeouts, retries, mirror failover, malformed data handling, logging. |
-| 73 | HTTP cleartext | PASS | HTTPS is default; only explicitly warned custom HTTP streams pass the app-layer gate, with dynamic-host Android config documented. |
+| 73 | HTTP cleartext | PASS | HTTPS is ranked first; credential-free directory/custom HTTP remains supported and diagnosed honestly for dynamic legacy hosts. |
 | 74 | Android permissions | PASS | Least privilege; no microphone/location/broad storage. |
 | 75 | Modern Android | PASS | API 36, edge-to-edge, FGS type, scoped storage, notifications, 16 KB alignment. |
 | 76 | Windows | PARTIAL | Release builds/launches; interaction smoke remains pending. |
@@ -85,20 +85,20 @@ This is the living, requirement-by-requirement acceptance ledger for the origina
 | 79 | Motion | PASS | Restrained state/tuner/favourite/record motion with reduced-motion setting. |
 | 80 | Empty states | PASS | Contextual empty/offline/no-stream next actions. |
 | 81 | Error UX | PASS | Human-readable recovery actions; no stack traces shown. |
-| 82 | Real tests | PASS | Unit/widget/integration plus real network, playback, background, recording, export and device visual evidence. |
-| 83 | Unit tests | PASS | Parsers, mappings, search/sort/queue, failover/malformed data, persistence, backup, health, settings and filenames covered. |
+| 82 | Real tests | PASS | 59 unit/widget plus 7 final Android integrations, real network playback/recording, controlled broken server, upgrade and device visual evidence. |
+| 83 | Unit tests | PASS | Playback cancellation/reconnect, updater identity/signature, recording liveness, pagination, persistence, parsers, mappings, search/sort/queue, backup, health and settings covered. |
 | 84 | Widget tests | PASS | Brand, recent search, station sorting and behavioral settings have dedicated widget coverage; integration renders the full flow. |
-| 85 | Android integration flow | PASS | Expanded onboarding/search/info/favourite flow passes on three API 36 profiles; custom persistence passes on Pixel-class. |
+| 85 | Android integration flow | PASS | Final Pixel-class batch passed all 7 flows: controlled server, custom, live, onboarding, platform, recording and stress. |
 | 86 | Real playback smoke | PASS | Swiss Jazz Android media session, bytes, ICY and controls verified. |
 | 87 | Background test | PASS | Home/wait/notification/return verified. |
 | 88 | Recording test | PASS | 26-second real file, FFprobe, replay and SAF export verified. |
-| 89 | Network failure tests | PARTIAL | Live Darbhanga primary/fallback failure handled; deterministic failure matrix pending. |
+| 89 | Network failure tests | PASS | Deterministic timeout/fallback/offline/runtime/reconnect plus Android redirect/delay/404/stale-intent and real upstream failure. |
 | 90 | Pixel visual QA | PASS | Pixel-class, compact and tablet screenshots inspected; duplicate player, wide-row and large-text issues corrected. |
 | 91 | Reference comparison | PASS | Airy white UI, giant dial, red needle, precise typography; no grey canvas. |
 | 92 | Performance | PARTIAL | Lazy lists/cache/bounded probes; formal profile trace pending. |
 | 93 | Lifecycle | PARTIAL | Background/restore/rotation exercised; kill-during-recording test pending. |
 | 94 | Icon/splash install test | PARTIAL | Installed/cold splash verified; physical Pixel launcher monochrome pending. |
-| 95 | Build commands | PASS | Format/pub/analyze/test/debug/release/AAB/Windows executed. |
+| 95 | Build commands | PASS | Final format/pub/analyze/59 tests/7 integrations/debug/release/AAB/Windows executed. |
 | 96 | Static analysis | PASS | No issues found on current baseline. |
 | 97 | Test failures | PASS | Failures retained in report, fixed and re-tested. |
 | 98 | Git discipline | PASS | User files preserved, clean history, pushed preview release. |
@@ -128,8 +128,8 @@ This is the living, requirement-by-requirement acceptance ledger for the origina
 | 122 | Coding style | PASS | Typed/null-safe/modular analyzer-clean source. |
 | 123 | Comments | PASS | Comments limited to non-obvious rationale. |
 | 124 | Logging | PASS | Scoped API/player/recorder/database/platform logging. |
-| 125 | Release quality | PARTIAL | Preview is clean and runnable; production signing/remaining gaps prevent final label. |
-| 126 | Critical acceptance matrix | PARTIAL | Core radio/record/save/export pass; remaining rows tracked here. |
+| 125 | Release quality | PASS | Versioned, verified APK/AAB/checksums and secret-backed reproducible tag workflow; legacy signing limitation remains explicit. |
+| 126 | Critical acceptance matrix | PASS | Core browse/play/switch/background/save/history/custom/record/replay/export/update flows verified to the available environment. |
 | 127 | Darbhanga-down behavior | PASS | Source diagnostics recorded; independent playback proof retained. |
 | 128 | Beyond compilation | PASS | Installed/tapped/backgrounded/recorded/exported/restarted/broken-network tested. |
 | 129 | Implementation over tutorial | PASS | Working repository and binaries delivered. |
@@ -139,21 +139,17 @@ This is the living, requirement-by-requirement acceptance ledger for the origina
 | 133 | Tests run autonomously | PASS | Repeated local/device test cycles. |
 | 134 | Emulator use | PASS | API 36 AVD used extensively. |
 | 135 | Web research | PASS | Current official sources consulted. |
-| 136 | Adversarial self-review | PARTIAL | Multiple real failures found/fixed; expanded matrix remains active. |
+| 136 | Adversarial self-review | PASS | Premature live timeout, false REC window, stale intents, 500 cap, updater ambiguity and test-selector drift reproduced, fixed and re-tested. |
 | 137 | Competitive research | PASS | Pattern-level review documented; no interface cloning. |
 | 138 | Quality over checkboxes | PASS | Unsupported guarantees remain explicit rather than faked. |
 | 139 | Future Dadaji receiver | PASS | `remoteRfReceiver` model and README concept, no distracting hardware work. |
 | 140 | Visual polish | PASS | Original, consistent reference-driven UI inspected on device. |
-| 141 | Final commands | PARTIAL | Baseline passed; must rerun after gap implementation on all target profiles. |
-| 142 | Final test report | PARTIAL | Real baseline values present; final three-profile matrix pending. |
+| 141 | Final commands | PASS | Final analyzer, 59 tests, 7 Android integrations, debug/release/AAB/Windows builds and install/upgrade passed. |
+| 142 | Final test report | PASS | Append-only v1.2 environment, failures, fixes, re-tests, hashes, upgrade, stress and limitations recorded. |
 | 143 | Exact final response | PENDING | Reserved until the ledger has no unacknowledged implementation gaps. |
 | 144 | Real radio, not a mock | PASS | Actual discovery/playback/record/export/background systems proven. |
 | 145 | Start and continue autonomously | PASS | Active work continues to verified completion. |
 
-## Current close-out order
+## v1.2.0 reliability close-out
 
-1. Search history, station sorting, Saved/history controls, collections, recording seek.
-2. Behavioral settings, timer persistence, repeated policy-aware reminders, cleartext policy.
-3. Deterministic network, widget, integration, lifecycle and backup tests.
-4. Compact-phone, Pixel-class and tablet Android runs plus Windows interaction smoke.
-5. Regenerate signed-as-available release artifacts, update evidence, commit, push and publish the next prerelease.
+The reliability mission is closed for the available environment. Physical Pixel 10/Bluetooth/audible-output evidence, Darbhanga upstream reachability and permanent Play signing remain external limitations rather than hidden implementation claims.

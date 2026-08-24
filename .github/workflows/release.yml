@@ -1,0 +1,110 @@
+name: Release Android
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  verify-and-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.41.9
+          cache: true
+
+      - name: Restore protected Android signing identity
+        env:
+          KEYSTORE_BASE64: ${{ secrets.DHWANI_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.DHWANI_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.DHWANI_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.DHWANI_KEY_PASSWORD }}
+        run: |
+          test -n "$KEYSTORE_BASE64"
+          test -n "$STORE_PASSWORD"
+          test -n "$KEY_ALIAS"
+          test -n "$KEY_PASSWORD"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/dhwani-upload.keystore"
+          {
+            echo "storeFile=$RUNNER_TEMP/dhwani-upload.keystore"
+            echo "storePassword=$STORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > android/key.properties
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed .
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Run unit and widget tests
+        run: flutter test
+
+      - name: Build signed Android artifacts
+        run: |
+          flutter build apk --release
+          flutter build appbundle --release
+
+      - name: Name and checksum release artifacts
+        id: artifacts
+        shell: bash
+        run: |
+          VERSION_VALUE="$(awk '/^version:/ {print $2}' pubspec.yaml)"
+          VERSION="${VERSION_VALUE%%+*}"
+          BUILD="${VERSION_VALUE##*+}"
+          APK="Dhwani-v${VERSION}-build${BUILD}-android.apk"
+          AAB="Dhwani-v${VERSION}-build${BUILD}-android.aab"
+          SUMS="Dhwani-v${VERSION}-build${BUILD}-SHA256SUMS.txt"
+          mkdir -p dist/release
+          cp build/app/outputs/flutter-apk/app-release.apk "dist/release/$APK"
+          cp build/app/outputs/bundle/release/app-release.aab "dist/release/$AAB"
+          (cd dist/release && sha256sum "$APK" > "$APK.sha256")
+          (cd dist/release && sha256sum "$APK" "$AAB" > "$SUMS")
+          echo "apk=$APK" >> "$GITHUB_OUTPUT"
+          echo "aab=$AAB" >> "$GITHUB_OUTPUT"
+          echo "sums=$SUMS" >> "$GITHUB_OUTPUT"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dhwani-android-release
+          path: dist/release/*
+          if-no-files-found: error
+
+      - name: Publish GitHub release assets
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Dhwani ${{ github.ref_name }} - Reliable Radio
+          body_path: dist/RELEASE_NOTES.md
+          files: |
+            dist/release/${{ steps.artifacts.outputs.apk }}
+            dist/release/${{ steps.artifacts.outputs.apk }}.sha256
+            dist/release/${{ steps.artifacts.outputs.aab }}
+            dist/release/${{ steps.artifacts.outputs.sums }}
+          fail_on_unmatched_files: true
+          overwrite_files: true

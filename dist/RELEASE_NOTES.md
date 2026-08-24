@@ -1,21 +1,56 @@
-# Dhwani 1.0.0 Preview 1
+# Dhwani v1.2.0 - Reliable Radio
 
-This Android preview contains the complete verified Dhwani implementation in this repository: live station discovery/search, Akashvani Darbhanga metadata and failover, background media controls, favourites/history/custom stations, network-stream recording, recording playback/share/SAF export, sleep timer, Car Mode, backup, dark mode, and Android policy-aware reminders.
+This release rebuilds Dhwani's critical paths around finite, truthful operations. A station may work, fail, redirect, stall, disappear, or be geo-blocked; the app now either confirms real playback/recording or reaches a useful terminal state without leaving an endless spinner or false LIVE/REC label.
 
-## Verification
+## What's fixed
 
-- Android 16/API 36 Pixel-class emulator
-- 13 unit/widget tests passed
-- 2 Android integration flows passed
-- Radio Swiss Jazz live playback, ICY metadata, background media session, notification pause/resume, 26-second recording, recording playback, and Downloads export verified
-- APK installed and cold-started
-- 16 KB APK alignment verified
+- Rapid station changes cannot let an old request replace the newest selection.
+- Recents/history begins only after confirmed playback and one listening session updates one row.
+- Saved, Search, Discover, tuner, custom stations, notifications and Car Mode use the same authoritative switching path.
+- Network, decoder and source errors are classified into short user-facing recovery states with sanitized diagnostics.
 
-## Important preview limitations
+## Playback
 
-- The APK and AAB are locally signed with the Android debug certificate because a private owner-controlled release keystore was not supplied. The APK is installable, but these artifacts must not be used as the permanent Play signing lineage.
-- Akashvani Darbhanga's current official stream reset TLS from the German test network; its previous CDN URL returned 404. Dhwani reports this honestly and the 1296 kHz metadata remains correct.
-- Physical Pixel 10, Bluetooth hardware, and audible speaker output were not available; API 36 emulator diagnostics were used.
-- Scheduled alarm/recording features are policy-aware reminders, not guaranteed unattended Android background launches.
+- Endless live broadcasts are started without awaiting playback completion.
+- Explicit switching, connecting, buffering, playing, paused, reconnecting, offline, unavailable, geo-blocked and unsupported states.
+- Ten-second per-source and 24-second whole-station startup budgets with ranked fallback streams.
+- Bounded 1/2/4-second runtime reconnects; selecting another station cancels pending recovery.
+- Real Radio Swiss Jazz playback, pause, background continuation and media controls verified on Android 16/API 36.
 
-Verify downloads with `SHA256SUMS.txt`.
+## Recording
+
+- REC appears only after FFmpeg is alive and real output bytes exist.
+- Owned-process cancellation, startup timeout, unexpected-exit finalization, corrupt-file deletion and FFprobe-derived duration/format.
+- Real HTTPS MP3 stream-copy and M4A conversion recordings verified for more than six seconds each.
+
+## Discovery
+
+- Country station results paginate beyond 500 and cache progressively.
+- Mirror selection tracks recent health/latency, backs off failing hosts and remains bounded/cancellable.
+- Stale directory rows expire without deleting favourites or custom stations.
+
+## Updates
+
+- Installed version/build/package metadata replaces hardcoded app identity.
+- Stable-only automatic checks use a 12-hour cooldown; manual checks distinguish current, network/API failure and incompatible releases.
+- Exact versioned APK selection, byte progress, cancellation, `.part` cleanup, SHA-256 verification, native APK package/version/signature inspection and atomic rename.
+- Android UI says Installer opened rather than claiming installation succeeded.
+
+## Stability
+
+- 59 unit/widget tests pass.
+- Android integration passes for onboarding, custom persistence, platform services, real live playback, real MP3/M4A recording, and controlled redirect/delay/404/stale-operation behavior.
+- A v1.1.0 build 3 to v1.2.0 build 4 in-place upgrade was accepted and preserved install/app state on the emulator.
+
+## Tested on
+
+- Flutter 3.41.9 / Dart 3.11.5 / Java 21.0.11.
+- Android 16/API 36 Pixel 10 approximation, 1280x2856 at 480 dpi.
+- Physical Pixel 10 hardware was not connected; no physical-device claim is made.
+
+## Known limitations
+
+- Akashvani Darbhanga's current official stream was unavailable from the German test network; Dhwani preserves accurate 1296 kHz metadata and reports the upstream failure honestly.
+- The compatibility release retains v1.1.0's protected legacy Android debug signer. It supports the tested in-place upgrade but is not a permanent Play signing identity.
+- Scheduled recording/radio alarm are honest user-visible reminders under modern Android background policy, not guaranteed silent unattended capture.
+- Full FFmpeg protocol/codec support makes universal APKs large; the AAB permits ABI-specific delivery.

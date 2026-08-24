@@ -1,9 +1,32 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+val signingProperties = Properties()
+val signingPropertiesFile = rootProject.file("key.properties")
+if (signingPropertiesFile.exists()) {
+    signingPropertiesFile.inputStream().use(signingProperties::load)
+}
+
+fun signingValue(property: String, environment: String): String? =
+    signingProperties.getProperty(property)?.takeIf { it.isNotBlank() }
+        ?: System.getenv(environment)?.takeIf { it.isNotBlank() }
+
+val releaseStorePath = signingValue("storeFile", "DHWANI_KEYSTORE_PATH")
+val releaseStorePassword = signingValue("storePassword", "DHWANI_STORE_PASSWORD")
+val releaseKeyAlias = signingValue("keyAlias", "DHWANI_KEY_ALIAS")
+val releaseKeyPassword = signingValue("keyPassword", "DHWANI_KEY_PASSWORD")
+val hasReleaseSigning = listOf(
+    releaseStorePath,
+    releaseStorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+).all { !it.isNullOrBlank() }
 
 android {
     namespace = "com.prashant.dhwani"
@@ -28,10 +51,26 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(releaseStorePath!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // A private upload keystore is intentionally not committed.
-            signingConfig = signingConfigs.getByName("debug")
+            // v1.1.0 shipped with the legacy local signer. CI supplies that
+            // keystore through encrypted secrets so v1.2.0 stays upgradeable.
+            signingConfig = if (hasReleaseSigning) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }

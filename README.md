@@ -71,7 +71,7 @@ Upstream station URLs are not treated as permanent. Dhwani keeps ranked alternat
 
 `1296 kHz · Medium Wave` is terrestrial metadata. Playback requires a separate internet URL. Internet-only stations display `LIVE · Internet Radio`; Dhwani does not invent FM numbers to decorate the tuner. The domain model is already extensible across `internetStream`, `remoteRfReceiver`, and `localRecording` sources.
 
-`DhwaniAudioHandler` is the only playback authority. It ranks known working URLs, applies a 15-second startup bound per source, tries alternatives without infinite retry, publishes observable idle/loading/buffering/playing/paused/reconnecting/error states, and maps them into the Android media session.
+`DhwaniAudioHandler` is the only playback authority. Each station change has a generation token, so a late result can never overwrite newer user intent. It ranks known working URLs, applies a 10-second per-source and 24-second whole-station startup bound, starts endless live playback without awaiting broadcast completion, and publishes deterministic selected/switching/connecting/buffering/playing/paused/reconnecting/offline/unavailable/geo-blocked/unsupported/error states to both Flutter and the Android media session.
 
 ## Background audio
 
@@ -119,11 +119,12 @@ flutter analyze
 flutter test
 flutter test integration_test/onboarding_flow_test.dart -d emulator-5554
 flutter test integration_test/custom_station_flow_test.dart -d emulator-5554
-flutter test integration_test/onboarding_flow_test.dart -d emulator-5556
-flutter test integration_test/onboarding_flow_test.dart -d emulator-5558
+flutter test integration_test/live_playback_smoke_test.dart -d emulator-5554
+flutter test integration_test/controlled_stream_server_test.dart -d emulator-5554
+flutter test integration_test/recording_smoke_test.dart -d emulator-5554
 ```
 
-The automated suite covers domain parsing and stream ranking, deterministic directory mirror failover/malformed data, terrestrial band parsing, tuning queue widening/sorting, favourite order, history metrics, collections, stream health, custom persistence, constrained backup import, recording filenames, search/sort/settings widgets, branding semantics, onboarding navigation, and custom-station creation/reopening. Live audio, Android media session, foreground notification controls, recording, playback, and SAF export were additionally exercised on-device; see [test_report.md](test_report.md).
+The automated suite covers live-Future non-blocking behavior, stale tune/reconnect cancellation, rapid navigation, fallback/timeouts/offline/runtime errors, one-row history sessions, recording liveness/finalization, updater release/APK verification, paginated mirror failover, domain parsing, tuning queues, favourites, collections, custom persistence, backup validation, and the complete widget/onboarding flows. Android integration uses both a controlled loopback broken-radio server and real Radio Swiss Jazz. Live audio, media session, foreground notification controls, recording, local playback, and SAF export evidence is maintained in [test_report.md](test_report.md).
 
 ## Build
 
@@ -141,7 +142,9 @@ Outputs:
 - `build/app/outputs/bundle/release/app-release.aab`
 - `build/windows/x64/runner/Release/dhwani.exe`
 
-The local release artifacts use the Android debug certificate because no private release keystore was supplied. Generate and protect a real upload key before a Play/GitHub production release; never commit the keystore or passwords.
+Tagged GitHub builds publish deterministic assets such as `Dhwani-v1.2.0-build4-android.apk`, its exact `.apk.sha256`, the matching AAB, and an aggregate checksum file. `.github/workflows/release.yml` pins the verified toolchain, requires format/analyze/tests, restores the compatible signer from encrypted repository secrets, and never commits key material.
+
+The v1.1.0 public APK established an Android debug certificate as its update lineage. v1.2.0 intentionally retains that exact protected signer so Android accepts in-place upgrades. It is not a suitable permanent Play identity; adopting a dedicated production key later requires a documented one-time reinstall unless store-managed migration is available. Fingerprints and the migration rationale are recorded in [decision.md](decision.md), never private keys or passwords.
 
 ## Privacy
 
@@ -149,7 +152,7 @@ Dhwani has no account, ads, analytics, telemetry, or tracking SDK. Favourites, h
 
 ## Known limitations
 
-See [known_issues.md](known_issues.md). The most important current limitation is upstream: Akashvani Darbhanga's official stream endpoint reset TLS from the German test network while its older CDN URL returned 404. The station metadata remains available and the UI reports the stream as unavailable; the player was independently proven with Radio Swiss Jazz.
+See [known_issues.md](known_issues.md). The most important external limitations are the unavailable physical Pixel 10, the legacy signing lineage, and Akashvani Darbhanga's current upstream reachability from the German test network. The station metadata remains available and the UI reports the stream as unavailable; the player was independently proven with Radio Swiss Jazz.
 
 ## Future: Dadaji receiver
 

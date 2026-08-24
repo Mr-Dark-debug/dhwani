@@ -159,3 +159,188 @@ Date: 2026-08-17 (Europe/Berlin)
 - Scheduled recording/alarm are notification-driven prepared actions, not falsely claimed unattended captures.
 - Automated environment could not confirm human-audible speaker output.
 - Production Play signing requires the owner's private upload key.
+
+## 2026-08-24 — Reliability mission baseline (v1.1.0+3)
+
+### Repository and release state
+
+- Local `main` and `origin/main` both pointed to `1a78018` (`v1.1.0`) after `git fetch --all --tags --prune`; the only initial working-tree addition was the new `GOAL.md` requested by the reliability mission.
+- Published release: `Dhwani v1.1.0 — In-App Updater, Radial Sleep Dial & Glass Navbar`.
+- Published asset: `dhwani-v1.1.0.apk`, 179,482,396 bytes, SHA-256 `F024C9E517F6BD4882D6647F0531AB5C4AF46CC3AD20757096A7372049BC045D`.
+- Published APK signature: APK Signature Scheme v2 valid; certificate SHA-256 `F11E976967911C8E585DD88817D6587076A802840699EEBF7E3C8304BEDBE3B5` (`CN=Android Debug`). This is not a production signing identity.
+- No GitHub Actions workflow existed at baseline.
+
+### Environment baseline
+
+- Flutter: 3.41.9 stable (`00b0c91f06`); the tool reported that a newer stable release exists.
+- Dart: 3.11.5.
+- Java: Temurin 21.0.11 LTS; Android Studio runtime 21.0.10.
+- Android SDK: 37.0.0 installed; project compile/target SDK remains 36.
+- `flutter doctor -v`: no issues found.
+- Three configured API 36 AVDs remain available: compact phone, Pixel 10 approximation, and Pixel Tablet; none was running during this baseline command.
+
+### Dependencies
+
+- Command: `flutter pub outdated`.
+- Result: the existing dependency set resolves. Riverpod 3.4.2 and several build/transitive updates are available, but no churn was accepted before reliability fixes and migration review.
+- FFmpeg full 2.5.2 remains intentionally pinned because the previously tried audio-only variant lacked HTTPS protocol support.
+
+### Static analysis and tests
+
+- Command: `flutter analyze`.
+- Baseline result: 2 warnings — unused `dart:io` in `app_update_sheet.dart` and unused Dio import in `app_update_service_test.dart`.
+- Command: `flutter test`.
+- Baseline result: 30 passed, 0 failed.
+- Important gap: the passing suite did not exercise live-play Future completion, stale tune cancellation, runtime `errorStream`, rapid transport input, recording byte handshake, pagination, updater errors/checksums, or upgrade compatibility.
+
+### Baseline builds
+
+- `flutter build apk --debug`: passed in 201.6 seconds.
+- `flutter build apk --release`: passed in 54.2 seconds; reported size 171.2 MB.
+- Release build is debug-signed by the current Gradle configuration.
+
+### Reproduced architectural defects
+
+- Live playback awaited `_player.play()` both for resume and after `setUrl()`. A live stream can therefore keep UI/navigation Futures pending until the broadcast ends.
+- Playback had no operation generation/cancellation guard. A late result for station A could overwrite a newer request for station B.
+- Next/Previous changed `_index` before station cleanup and then called `selectStation`, making old/target session identity ambiguous.
+- Each fallback could consume 15 seconds with no whole-station deadline; user-facing final errors appended raw exception text.
+- Runtime errors relied on `playbackEventStream.onError`; player/metadata subscriptions were not retained for disposal.
+- UI entry points independently selected the provider station, configured the queue, called the handler, and manually inserted history. The audio session callback could insert history again, producing duplicates/zero-duration plays.
+- Recording changed to `recording` immediately after `executeAsync` returned, before FFmpeg liveness or output bytes were proven. Unexpected FFmpeg exit left a partial orphan and no finalization attempt.
+- Radio Browser country loading was capped at 500 with no pagination, cancellation, failure scoring, or stale catalogue expiry.
+- Updater hardcoded version/build, selected the first APK, returned `null` for both up-to-date and failure, had no cooldown/checksum/APK identity validation, and treated installer launch as success. Installer permission exceptions incorrectly defaulted to allowed.
+- Automatic update checking ran from `PlayerScreen` mount without a durable cooldown.
+- Android network security allowed cleartext globally while directory HTTP streams were rejected in Dart, an inconsistent compatibility policy.
+
+# Dhwani v1.2.0 Final Reliability Verification
+
+Date: 2026-08-24 (Europe/Berlin)
+
+## Environment
+
+- Flutter: 3.41.9 stable, revision `00b0c91f06`
+- Dart: 3.11.5 stable, Windows x64
+- Java: Eclipse Temurin OpenJDK 21.0.11 LTS
+- Android SDK installed: 37; project compile/target SDK: 36
+- Gradle: 8.14; Android Gradle Plugin: 8.12.1; Kotlin: 2.2.20
+
+## Android device
+
+- Device: `Dhwani_Pixel_10_Approx` / emulator-5554
+- Manufacturer/model reported: Google / `sdk_gphone64_x86_64`
+- Android: 16, SDK 36
+- Resolution: 1280 x 2856
+- Density: 480 dpi
+- Physical Pixel 10: not connected; this remains an explicit approximation.
+
+## Failure, diagnosis, and retest history
+
+### Live playback startup budget
+
+- Initial combined integration result: **FAILED**. Radio Swiss Jazz did not reach PLAYING before the six-second per-source timeout.
+- Evidence: ExoPlayer initialization began around 01:46:53.581 and was released around 01:46:59.064, proving the application cancelled a still-initializing healthy source.
+- Fix: 10-second per-source and 24-second whole-station budgets; unrelated Darbhanga fallback replaced by Radio Swiss Jazz AAC metadata fallback.
+- Retest: `flutter test integration_test/live_playback_smoke_test.dart -d emulator-5554` passed; the final all-integration run also passed.
+
+### Recording byte handshake
+
+- Initial real-device result: **FAILED** at a ten-second startup handshake; the full native FFmpeg/TLS process had not flushed enough output bytes.
+- Fix: bounded 25-second handshake plus packet-flush options; REC still requires an alive process and at least 2048 output bytes.
+- Retest: real MP3 stream-copy and M4A conversion both passed with FFprobe durations and cleanup.
+
+### Integration selector drift
+
+- Initial onboarding integration result: **FAILED** because tests still searched for obsolete `Band filter` and direct `Station information` tooltips.
+- Fix: tests use the current accessible `Filter by source / band` control, current menu labels, `More actions` -> `Station info`, and stable 48dp bottom-navigation keys.
+- Retest: onboarding, custom station, and platform services all passed. This was test drift, not an application crash.
+
+## Static analysis and deterministic tests
+
+- Command: `dart format .`
+- Result: 55 Dart files formatted; no pending formatter changes.
+- Command: `flutter analyze`
+- Result: **No issues found**.
+- Command: `flutter test`
+- Result: **59 passed, 0 failed**.
+- New coverage includes non-completing live play Futures, stale tune completion, fallback, station deadline, offline, pause/resume/retry/stop, runtime reconnect, stale reconnect cancellation, 100 rapid intents, sanitized failures, one-row history, regional health evidence, 502-item pagination, recording process/byte/finalization behavior, installed-version update decisions, prerelease/malformed/ambiguous release handling, package/signature rejection and atomic verified download.
+
+## Android integration tests
+
+- Command: `flutter test integration_test -d emulator-5554`
+- Final result: **7 passed, 0 failed** in 8 minutes 10 seconds.
+- `controlled_stream_server_test.dart`: real Android decoder followed loopback HTTP 302, played generated WAV, terminated HTTP 404 as Unavailable, and rejected a delayed stale station operation.
+- `custom_station_flow_test.dart`: created and reopened `Dadaji Radio`, 1296 kHz AM.
+- `live_playback_smoke_test.dart`: real Radio Swiss Jazz reached PLAYING and then PAUSED.
+- `onboarding_flow_test.dart`: Country -> India -> Bihar -> Darbhanga -> Akashvani -> band/favourite/Saved/search/info.
+- `platform_services_test.dart`: Android equalizer and repeated reminder initialization.
+- `recording_smoke_test.dart`: real HTTPS MP3 and M4A recording validation.
+- `stress_navigation_test.dart`: 100 player transitions plus 20 Radio/Discover/Saved/Recordings switches.
+- Final cleared logcat scan: no FATAL EXCEPTION, ANR, uncaught Dart, database exception, foreground-service-start failure or media-session illegal-state match.
+
+## Live radio and background playback
+
+### Radio Swiss Jazz
+
+- Primary URL: `https://stream.srg-ssr.ch/m/rsj/mp3_128`
+- Fallback metadata URL: `https://stream.srg-ssr.ch/rsj/aacp_96.m3u`
+- Result: confirmed Android PLAYING, confirmed PAUSED, no endless awaited Future.
+- Earlier manual API 36 verification also kept the media session PLAYING after Home/30 seconds; notification Pause/Play/Next/Previous updated media state and switched TORi-Live-8000 correctly.
+- Audible: automated environment cannot make a subjective speaker claim; decoder, AudioTrack/media session, bytes and metadata are the evidence.
+
+### Akashvani Darbhanga
+
+- Metadata: 1296 kHz, Medium Wave/AM, Darbhanga, Bihar, Maithili/Hindi.
+- Official source from the German network: unavailable/reset; legacy BitGravity source: HTTP 404.
+- Result: bounded failure and honest non-LIVE UI. The upstream failure is not stored as a global-offline claim.
+
+## Recording
+
+- Station/source: Radio Swiss Jazz MP3 128 kbps over HTTPS.
+- Original mode: MP3 stream copy; output exceeded 1024 bytes; FFprobe duration exceeded 8 seconds; format `mp3`.
+- Converted mode: M4A; output exceeded 1024 bytes; FFprobe duration exceeded 6 seconds; format `m4a`.
+- REC handshake: output must exceed 2048 bytes before status becomes recording.
+- Cleanup: both temporary integration recordings deleted and database/library cleared.
+- Prior v1.1 SAF export/replay remains valid and the export implementation was unchanged by the state-machine refactor.
+
+## Upgrade and signing
+
+- Old artifact: published v1.1.0, build 3.
+- New artifact: final v1.2.0, build 4.
+- Old UI was seeded with India -> Bihar -> Darbhanga, Akashvani 1296 and a saved favourite.
+- `adb install -r` of the final v1.2 APK succeeded.
+- `firstInstallTime` remained `2026-08-24 02:26:08`; `lastUpdateTime` advanced to `2026-08-24 02:29:13`.
+- After upgrade, Akashvani Darbhanga 1296 restored and the favourite remained selected.
+- APK Signature Scheme v2: valid; one signer; certificate SHA-256 `F11E976967911C8E585DD88817D6587076A802840699EEBF7E3C8304BEDBE3B5`.
+- Secret-backed Gradle signing report resolved the CI release variant to the same certificate.
+
+## Final Android artifacts
+
+- Debug APK: `build/app/outputs/flutter-apk/app-debug.apk`, 283,904,299 bytes.
+- Release APK: `dist/release/Dhwani-v1.2.0-build4-android.apk`, 179,777,010 bytes.
+- APK SHA-256: `8EE1927F0F40870BBC6299BAFD265C4805DBB3DD8D2D87324C5510546507CE48`.
+- Release AAB: `dist/release/Dhwani-v1.2.0-build4-android.aab`, 111,581,045 bytes.
+- AAB SHA-256: `ACFF86736EE25CE72843C1298A850A2C225EFC3AD345028E3F66D9EF949C8E19`.
+- Package: `com.prashant.dhwani`; version 1.2.0; build 4; min SDK 24; target/compile SDK 36.
+- `zipalign -c -P 16 -v 4`: verification successful.
+- Final release APK install/launch: passed; process remained alive.
+
+## Visual QA
+
+- Reference and final Pixel screenshot were inspected side by side.
+- Result: warm-white real app canvas, large frequency, red fixed needle, fine tuner strip, restrained rounded controls, clean status/navigation insets and preserved favourite state; no grey presentation canvas, overlap, clipping or gesture-bar collision.
+- Screenshot: `screenshots/v1.2.0/pixel10-final-upgrade-preserved.png`.
+
+## Windows
+
+- Command: `flutter build windows --release`
+- Result: passed in 54.6 seconds.
+- Output: `build/windows/x64/runner/Release/dhwani.exe`.
+- Hidden launch smoke: process remained alive for seven seconds and was intentionally stopped.
+
+## Genuine remaining limitations
+
+- No physical Pixel 10, Bluetooth accessory or human audible-output verification was available.
+- Akashvani Darbhanga remains externally unavailable from the German network used here.
+- The protected legacy signer preserves v1.1 -> v1.2 upgrades but is not a permanent Play production identity.
+- Scheduled recording/alarm remain policy-aware user-visible reminders rather than a false unattended-capture guarantee.

@@ -659,3 +659,278 @@ Network recording must work with the HTTPS sources Dhwani intentionally prefers.
 
 ### Revisit if
 A maintained smaller build combines TLS with the needed audio encoders and passes the same device recording test.
+
+## DEC-0023 — Generation-controlled live playback state machine
+
+Date: 2026-08-24
+Status: Accepted
+
+### Question
+How should Dhwani prevent endless live-play Futures and stale station operations from corrupting state during rapid navigation?
+
+### Options considered
+- Add timeouts around the existing screen-level calls
+- Serialize every command in an unbounded FIFO queue
+- Make the audio handler authoritative, inject a testable engine, and let the newest generation supersede older tune/reconnect work
+
+### Research / evidence
+- The v1.1.0 handler awaited `AudioPlayer.play()`. just_audio's maintained example starts playback without awaiting broadcast completion, while source loading is awaited.
+- just_audio 0.10.6 documents `PlayerInterruptedException` when a newer source load interrupts an older load.
+- Current UI paths independently changed the selected provider, queue, history, and handler, and the handler changed `_index` before previous-session cleanup.
+
+### Decision
+Refactor the handler into an explicit state machine with an incrementing operation generation, per-source and whole-station deadlines, runtime error/processing subscriptions, bounded reconnect, atomic station transitions, and newest-intent-wins semantics. Introduce an injectable audio-engine boundary so cancellation, timeout, runtime error, and rapid input are deterministic unit tests.
+
+### Why
+Generation checks make late async results harmless without accumulating stale station connections. Awaiting preparation and confirmed PLAYING state, while starting the endless broadcast unawaited, gives UI callers a finite and truthful operation.
+
+### Trade-offs
+- This is a larger core refactor than patching individual screens.
+- Media notification state must be emitted from the same explicit state machine rather than inferred opportunistically.
+
+### Revisit if
+just_audio exposes a first-class cancellable tune transaction with equivalent testability.
+
+## DEC-0024 — One durable history row per confirmed listening session
+
+Date: 2026-08-24
+Status: Accepted
+
+### Question
+How should Recents avoid duplicate and failed zero-duration plays?
+
+### Options considered
+- Keep UI history inserts and deduplicate by timestamp
+- Insert only after a session ends
+- Start one row after actual playback begins and update that row on pause, stop, switch, or disposal
+
+### Research / evidence
+- v1.1.0 inserted history manually from location, search, discover, Saved, collections, and tuner flows while the audio handler separately inserted a duration row.
+- The existing table already has an auto-increment row ID and duration column, so session semantics do not require a destructive schema migration.
+
+### Decision
+The audio authority alone starts a history row after PLAYING is confirmed and updates that row with measured duration when the session finishes. UI selection never writes history.
+
+### Why
+Failed loads are excluded, one listen is counted once, and an interrupted process can leave a valid partial zero-duration session without corrupting the database.
+
+### Trade-offs
+- Existing duplicate rows are preserved as historical user data; new duplication is prevented rather than guessing which old rows to delete.
+
+### Revisit if
+cross-device history synchronization later requires globally unique session IDs.
+
+## DEC-0025 — Support directory HTTP streams with an explicit insecure-transport policy
+
+Date: 2026-08-24
+Status: Accepted
+
+Supersedes the app-layer rejection portion of DEC-0014.
+
+### Question
+Should legitimate Radio Browser stations using plain HTTP remain unplayable even though Android is configured for dynamic cleartext radio hosts?
+
+### Options considered
+- Reject every directory HTTP URL
+- Permit HTTP only for custom stations
+- Prefer HTTPS, but permit token-free HTTP radio URLs from supported catalogue/custom sources and label transport security honestly
+
+### Research / evidence
+- v1.1.0 globally allowed Android cleartext for just_audio's header proxy but rejected non-custom HTTP in Dart, causing repeated directory incompatibility.
+- Radio stations still commonly expose dynamic HTTP-only Icecast/Shoutcast endpoints; host enumeration in a static network-security configuration is not practical.
+
+### Decision
+Permit valid HTTP/HTTPS stream URLs, rank recent success then fewer failures then HTTPS, reject embedded credentials, and expose secure/insecure transport in diagnostics. Never send secrets or upgrade a URL synthetically.
+
+### Why
+This resolves the contradictory policy and maximizes legitimate radio compatibility without describing HTTP as secure.
+
+### Trade-offs
+- Cleartext audio can be observed or modified on the network.
+- Android's cleartext permission remains broad because station hosts are discovered at runtime.
+
+### Revisit if
+Radio Browser reaches near-universal HTTPS coverage or Android adds a practical runtime host allow-list.
+
+## DEC-0026 — Verified GitHub updater with legacy signing transparency
+
+Date: 2026-08-24
+Status: Accepted
+
+### Question
+How should self-update remain deterministic and safe when the published v1.1.0 APK is debug-signed?
+
+### Options considered
+- Keep the current first-APK downloader and hardcoded version
+- Disable updating entirely
+- Use installed package metadata, stable-release policy, deterministic assets, checksums and native APK inspection while preserving the published certificate for the immediate compatibility release
+
+### Research / evidence
+- Published v1.1.0 asset SHA-256 is `F024C9E517F6BD4882D6647F0531AB5C4AF46CC3AD20757096A7372049BC045D`.
+- Its signer certificate SHA-256 is `F11E976967911C8E585DD88817D6587076A802840699EEBF7E3C8304BEDBE3B5` (`CN=Android Debug`). Android requires compatible signing identity for in-place updates.
+- `package_info_plus` exposes installed version/build/package/signature metadata. Android `PackageManager.getPackageArchiveInfo` can inspect an APK before opening the installer.
+
+### Decision
+Build a typed update state/result API using actual installed metadata, stable-only automatic checks with cooldown, deterministic `Dhwani-vX-buildY-android.apk` selection, progress/cancel/retry/cleanup, SHA-256 verification, native package/version/signature inspection, and truthful `Installer opened` language. Keep the next compatibility artifact on the already-published signer only because no protected production key exists; document that a future production-key migration requires a one-time reinstall.
+
+### Why
+It prevents installing ambiguous, corrupt, wrong-package, downgraded, or differently signed APKs while accurately describing the unavoidable legacy certificate constraint.
+
+### Trade-offs
+- The published debug certificate is unsuitable as a long-term production identity.
+- A secure new release key cannot replace it through an Android in-place upgrade.
+
+### Revisit if
+the owner supplies a protected production key or a store-managed signing migration becomes available.
+
+## DEC-0027 — Hold Flutter 3.41.9 during the reliability refactor
+
+Date: 2026-08-24
+Status: Accepted
+
+### Question
+Should Dhwani upgrade from Flutter 3.41.9 to current stable 3.47.0 before fixing playback and updater architecture?
+
+### Options considered
+- Upgrade toolchain and dependencies immediately
+- Never upgrade
+- Complete the reliability state-machine baseline first, then evaluate the toolchain independently
+
+### Research / evidence
+- Flutter's official release index lists 3.47.0 as current stable.
+- The 3.41.9 environment passes all 30 baseline tests and both Android builds; the current defects are application concurrency/state problems, not missing framework APIs.
+- The baseline analyzer has two local unused-import warnings unrelated to Flutter version.
+
+### Decision
+Keep Flutter 3.41.9 for the core reliability change. Add only dependencies required for installed metadata and checksum validation. Re-evaluate 3.47.0 after deterministic regression and upgrade tests pass.
+
+### Why
+It avoids mixing a large framework migration with playback concurrency diagnosis and keeps causal evidence clear.
+
+### Trade-offs
+- Newer framework fixes are not adopted in the first reliability milestone.
+
+### Revisit if
+A verified bug fix needed by Dhwani exists only in Flutter 3.47.x or the completed suite passes before a dedicated migration trial.
+
+## DEC-0028 — Prove recording liveness before showing REC
+
+Date: 2026-08-24
+Status: Accepted
+
+### Question
+When may Dhwani truthfully claim that a live network recording has started?
+
+### Options considered
+- Show REC as soon as FFmpeg is launched
+- Wait for the process only
+- Require the owned FFmpeg process to remain alive and the output to cross a non-trivial byte threshold within a bounded handshake
+
+### Research / evidence
+- The previous service entered `recording` immediately after asynchronous FFmpeg launch, even when the endpoint failed before producing media.
+- On the API 36 x86_64 emulator, the full FFmpeg native process sometimes required more than ten seconds to initialize TLS and flush the first packets.
+- A 25-second handshake reliably produced validated Radio Swiss Jazz MP3 and M4A files; FFprobe then supplied stored duration/format instead of wall-clock guesses.
+
+### Decision
+Expose explicit starting, recording, stopping, finalizing, saved, and failed states. Show REC only after the process is alive and at least 2048 bytes exist. Bound startup at 25 seconds, cancel owned processes on failure/switch, validate output with FFprobe, save valid partial captures, and delete invalid files.
+
+### Why
+The UI can no longer claim recording when zero media bytes exist, while slower native/TLS startup still has a realistic opportunity to succeed.
+
+### Trade-offs
+- Users may see Starting for several seconds on slower devices.
+- Playback and recording remain independent network connections because tapping just_audio's internal bytes is not a supported public API.
+
+### Revisit if
+A maintained native byte-tee or local-proxy design can feed playback and recording from one connection without reducing protocol support.
+
+## DEC-0029 — Paginate and health-rank Radio Browser mirrors
+
+Date: 2026-08-24
+Status: Accepted
+
+### Question
+How should large-country discovery avoid a hidden 500-station cap and single-mirror failures?
+
+### Options considered
+- Increase one fixed request limit
+- Fetch every station eagerly
+- Page in bounded batches, publish each cached page progressively, and rank mirrors by recent success/failure latency
+
+### Research / evidence
+- The prior country request used a fixed limit of 500.
+- A deterministic 502-station test proves offset 0 and 500 are merged without losing results.
+- The Radio Browser protocol provides multiple mirrors; public hosts can independently timeout or return malformed data.
+
+### Decision
+Fetch 500-station pages with cancellation, a 45-second total directory budget, a 10,000-result safety cap, deduplication, progressive cache callbacks, four-mirror failover, and temporary backoff based on observed failures/latency. Prune directory-only rows after 30 days while preserving favourites and custom data.
+
+### Why
+Users can browse cached/early results quickly and large countries are complete without allowing an upstream directory to consume unbounded memory, requests, or time.
+
+### Trade-offs
+- Counts above the safety cap are intentionally not loaded in one operation.
+- Mirror health is local evidence, not a global uptime guarantee.
+
+### Revisit if
+Radio Browser introduces cursor pagination or a stable bulk-sync protocol.
+
+## DEC-0030 — Reproducible GitHub releases retain the v1.1 signer lineage
+
+Date: 2026-08-24
+Status: Accepted
+
+### Question
+How can automated v1.2 releases remain installable over v1.1.0 without committing the legacy private key?
+
+### Options considered
+- Generate a new production key immediately and break in-place upgrade
+- Commit or publish the old keystore
+- Store the matching legacy keystore in encrypted GitHub Actions secrets, configure Gradle from ephemeral properties, and document the future one-time production-key migration
+
+### Research / evidence
+- Both published v1.1.0 and local upgrade tests use certificate SHA-256 `F11E976967911C8E585DD88817D6587076A802840699EEBF7E3C8304BEDBE3B5`.
+- Android accepted v1.1.0 build 3 to v1.2.0 build 4 with the same signer and preserved `firstInstallTime` plus app data.
+- GitHub authentication has repository/workflow scope, and the four signing inputs are now present as encrypted repository secrets.
+
+### Decision
+Use secret-backed Gradle signing in CI and retain the matching legacy signer for the v1.2 compatibility release. Pin Flutter 3.41.9 and Java 21 in the tag workflow; require format, analyze, tests, APK/AAB builds, deterministic names, and SHA-256 assets before publishing.
+
+### Why
+Existing installations can update in place, while private key bytes and passwords never enter the repository or workflow logs.
+
+### Trade-offs
+- The certificate is still an Android debug identity and is unsuitable as the permanent Play signing lineage.
+- Migrating to a dedicated production key later requires a clearly communicated reinstall unless a store-managed migration is available.
+
+### Revisit if
+A dedicated release identity and distribution-channel migration plan are ready.
+
+## DEC-0031 — Use an in-process broken-radio server for decoder integration
+
+Date: 2026-08-24
+Status: Accepted
+
+### Question
+How should transport failures be reproduced without waiting for random public stations to fail?
+
+### Options considered
+- Depend only on live internet smoke tests
+- Mock the entire audio engine
+- Keep fast fake-engine state tests and add an Android integration fixture served from the app process
+
+### Research / evidence
+- Fake-engine tests deterministically cover hanging Futures and operation ordering but cannot validate ExoPlayer redirect/HTTP behavior.
+- An Android loopback HttpServer successfully served a generated WAV, delayed headers, redirects, 404/500 responses, and connection-drop endpoints without external network dependency.
+
+### Decision
+Retain both test layers: injected-engine unit tests for exhaustive state transitions and a controlled Android server test for platform-decoder redirect, terminal failure, and stale-intent cancellation. Keep a separate real Radio Swiss Jazz smoke test.
+
+### Why
+Together they distinguish app state-machine correctness, platform integration, and real-world internet health rather than conflating them.
+
+### Trade-offs
+- Integration builds remain slow because the full FFmpeg native dependency is packaged.
+
+### Revisit if
+Flutter gains an official lightweight media integration-test harness with equivalent decoder coverage.

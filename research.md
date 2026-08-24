@@ -77,6 +77,15 @@ TuneIn, Simple Radio, myTuner, Radio Garden, and Radioplayer were reviewed at a 
 ## 2026-08-17 — Behavioral close-out research
 
 - Android foreground-service start restrictions: https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start
+
+## 2026-08-24 — Reliability and updater research
+
+- `package_info_plus` 10.2.1 is the installed-metadata source for package name, semantic version, build number and installed signer data. Its official compatibility requirements include Flutter 3.38.1+, Dart 3.10+, Java 17, Kotlin 2.2, Android Gradle Plugin 8.12.1+ and Gradle 8.13+. Dhwani already satisfies these after moving AGP to 8.12.1: https://pub.dev/packages/package_info_plus
+- `crypto` 3.0.7 supplies streaming SHA-256 under the BSD-3-Clause licence; the updater hashes the completed `.part` file before atomic rename: https://pub.dev/packages/crypto
+- Android `PackageManager.getPackageArchiveInfo` and `SigningInfo` are the platform APIs used to inspect an APK package/version/signers before opening the installer: https://developer.android.com/reference/android/content/pm/PackageManager#getPackageArchiveInfo(java.lang.String,%20int) and https://developer.android.com/reference/android/content/pm/SigningInfo
+- GitHub Releases returns release and asset metadata but does not itself make an arbitrary APK safe. Dhwani requires one exact `Dhwani-vX.Y.Z-buildN-android.apk`, its exact `.apk.sha256`, trusted GitHub asset URLs, expected byte size, package `com.prashant.dhwani`, newer version code, archive validity, and the known signer.
+- `flutter pub outdated` on 2026-08-24 showed newer Riverpod/build tooling, but those versions were not adopted during the reliability release. No application defect required them, and holding the tested Flutter 3.41.9 dependency graph avoids unrelated migration risk.
+- Radio Browser currently reported the Radio Swiss Jazz MP3 and AAC sources healthy. The real Android smoke test uses the public MP3 endpoint first and the AAC playlist only as a fallback; upstream availability remains external evidence, never a hardcoded LIVE claim.
 - Android alarm guidance and exact-alarm privilege: https://developer.android.com/develop/background-work/services/alarms
 - Android 15 foreground-service changes: https://developer.android.com/about/versions/15/changes/foreground-service-types
 - `flutter_timezone` 5.1.0: Apache-2.0 and multi-platform; selected for the device IANA identifier used by repeated reminder schedules.

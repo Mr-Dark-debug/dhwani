@@ -49,3 +49,15 @@ Playback evidence includes network bytes, buffered audio, ICY metadata, active A
 Status: **RESOLVED**
 
 Fresh API 36 integration testing found that the selected audio-only FFmpeg native binary returned `https protocol not found`. Dhwani now uses the non-GPL full 2.5.2 variant with TLS and audio libraries. Real HTTPS MP3 stream-copy and M4A conversion recordings both passed with FFprobe validation; temporary test recordings were deleted.
+
+## 2026-08-24 — Legacy signer is protected but not a production identity
+
+Status: Open (release lineage)
+
+The matching v1.1.0 signer is now stored only in encrypted GitHub repository secrets and the v1.2.0 upgrade path is verified. Its certificate is still `CN=Android Debug`, so it is not a suitable permanent Play signing identity. Moving to a dedicated production key will require a documented one-time reinstall unless a store-managed signing migration is available. No keystore or password is committed.
+
+## 2026-08-24 — Six-second source timeout rejected a healthy live stream
+
+Status: **RESOLVED**
+
+The first combined integration run cancelled Radio Swiss Jazz while ExoPlayer was still initializing. Per-source startup is now bounded at 10 seconds with a 24-second whole-station budget. The real Android smoke retest reached PLAYING in 15 seconds including app/test startup and then paused cleanly.
