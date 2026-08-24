@@ -313,6 +313,13 @@ class _FakeAudioHandler extends Fake implements DhwaniAudioHandler {
   }) async {}
 
   @override
+  Future<void> tuneStation(
+    RadioStation station, {
+    List<RadioStation>? queueStations,
+    bool autoplay = false,
+  }) async {}
+
+  @override
   Future<void> skipToNext() async {}
 
   @override

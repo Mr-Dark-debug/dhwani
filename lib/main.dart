@@ -33,12 +33,7 @@ Future<void> main() async {
     DhwaniLog.android('Uncaught platform callback error', error, stack);
     return true;
   };
-  final startup = runZonedGuarded<Future<void>>(
-    _startApp,
-    (error, stack) =>
-        DhwaniLog.android('Uncaught application-zone error', error, stack),
-  );
-  if (startup != null) await startup;
+  await _startApp();
 }
 
 Future<void> _startApp() async {

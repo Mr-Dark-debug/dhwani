@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -97,33 +98,49 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
 
     final all = ref.watch(stationsProvider).value ?? const <RadioStation>[];
     var station = ref.watch(selectedStationProvider);
-    if (!_restored && station == null && all.isNotEmpty) {
-      _restored = true;
-      final encoded = ref.read(preferencesProvider).getString('lastStation');
-      RadioStation? restored;
-      if (encoded != null) {
-        try {
-          restored = RadioStation.decode(encoded);
-        } catch (_) {}
+    if (!_restored) {
+      if (station != null) {
+        _restored = true;
+        final current = station;
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          final queue = tuningQueue(
+            all,
+            current: current,
+            preferredScope: ref.read(settingsProvider).defaultScope,
+          );
+          final handler = ref.read(audioHandlerProvider);
+          if (handler.currentStation == null ||
+              handler.currentStation!.id != current.id) {
+            await ref
+                .read(stationPlaybackControllerProvider)
+                .tune(
+                  current,
+                  queue: queue,
+                  autoplay: ref.read(settingsProvider).autoPlay,
+                );
+          }
+        });
+      } else if (all.isNotEmpty) {
+        _restored = true;
+        final restored =
+            all.where((item) => item.isDarbhanga).firstOrNull ?? all.first;
+        ref.read(selectedStationProvider.notifier).select(restored);
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          final queue = tuningQueue(
+            all,
+            current: restored,
+            preferredScope: ref.read(settingsProvider).defaultScope,
+          );
+          await ref
+              .read(stationPlaybackControllerProvider)
+              .tune(
+                restored,
+                queue: queue,
+                autoplay: ref.read(settingsProvider).autoPlay,
+              );
+        });
+        station = restored;
       }
-      restored ??=
-          all.where((item) => item.isDarbhanga).firstOrNull ?? all.first;
-      final value = restored;
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        final queue = tuningQueue(
-          all,
-          current: value,
-          preferredScope: ref.read(settingsProvider).defaultScope,
-        );
-        await ref
-            .read(stationPlaybackControllerProvider)
-            .tune(
-              value,
-              queue: queue,
-              autoplay: ref.read(settingsProvider).autoPlay,
-            );
-      });
-      station = restored;
     }
     if (station == null) {
       return DhwaniShell(
@@ -176,14 +193,20 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
             queue: queue,
             compact: compact,
           );
-          return SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(20, compact ? 10 : 18, 20, 24),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 680),
-                child: content,
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              _StationBackgroundBackdrop(station: station, compact: compact),
+              SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(20, compact ? 10 : 18, 20, 24),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 680),
+                    child: content,
+                  ),
+                ),
               ),
-            ),
+            ],
           );
         },
       ),
@@ -210,8 +233,6 @@ class _PlayerContent extends ConsumerWidget {
     final largeText = MediaQuery.textScalerOf(context).scale(1) > 1.1;
     final tight = compact && largeText;
     final playing = snapshot.status == DhwaniPlaybackStatus.playing;
-    final busy = snapshot.busy;
-    final failed = _isTerminalPlaybackFailure(snapshot.status);
     return Column(
       children: [
         Row(
@@ -221,20 +242,31 @@ class _PlayerContent extends ConsumerWidget {
               onPressed: () => context.push('/countries'),
               icon: const Icon(Icons.arrow_back_rounded),
             ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: Theme.of(
-                  context,
-                ).colorScheme.onSurface.withValues(alpha: .07),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Text(
-                station.city ?? station.state ?? station.country,
-                style: const TextStyle(fontWeight: FontWeight.w700),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: .07),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Text(
+                    station.city ?? station.state ?? station.country,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
               ),
             ),
-            const Spacer(),
+            const SizedBox(width: 6),
             _BandMenu(station: station),
             IconButton(
               tooltip: 'More actions',
@@ -379,96 +411,11 @@ class _PlayerContent extends ConsumerWidget {
             ),
           ],
         ),
-        if (recording.status == RecordingStatus.recording) ...[
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-            decoration: BoxDecoration(
-              color: DhwaniColors.signal.withValues(alpha: .12),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: DhwaniColors.signal.withValues(alpha: .3),
-                width: 1,
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: DhwaniColors.signal,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'REC  ${_duration(recording.elapsed)}',
-                  style: const TextStyle(
-                    color: DhwaniColors.signal,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 13,
-                    letterSpacing: .5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
         SizedBox(height: compact ? 10 : 16),
-        SizedBox(
-          width: double.infinity,
-          child: FilledButton.icon(
-            key: const Key('player-play-pause'),
-            onPressed: busy
-                ? null
-                : () => playing
-                      ? ref.read(audioHandlerProvider).pause()
-                      : failed
-                      ? ref.read(stationPlaybackControllerProvider).retry()
-                      : playWithMediaNotification(ref),
-            style: FilledButton.styleFrom(
-              minimumSize: Size.fromHeight(compact ? 66 : 80),
-              backgroundColor: playing
-                  ? Theme.of(context).colorScheme.onSurface
-                  : DhwaniColors.signal,
-              foregroundColor: playing
-                  ? Theme.of(context).scaffoldBackgroundColor
-                  : Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(22),
-              ),
-              elevation: playing ? 0 : 3,
-              shadowColor: DhwaniColors.signal.withValues(alpha: .35),
-            ),
-            icon: busy
-                ? const SizedBox.square(
-                    dimension: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.2,
-                      color: Colors.white,
-                    ),
-                  )
-                : Icon(
-                    playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                    size: 28,
-                  ),
-            label: Text(
-              busy
-                  ? _statusLabel(snapshot.status)
-                  : playing
-                  ? 'Pause'
-                  : failed
-                  ? 'Retry'
-                  : 'Play live',
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                letterSpacing: .4,
-              ),
-            ),
-          ),
+        _PlayLiveButton(
+          station: station,
+          snapshot: snapshot,
+          compact: compact,
         ),
       ],
     );
@@ -690,6 +637,179 @@ class _StatusPill extends StatelessWidget {
   }
 }
 
+class _PlayLiveButton extends ConsumerWidget {
+  const _PlayLiveButton({
+    required this.station,
+    required this.snapshot,
+    required this.compact,
+  });
+
+  final RadioStation station;
+  final DhwaniPlayerSnapshot snapshot;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final playing = snapshot.status == DhwaniPlaybackStatus.playing;
+    final busy = snapshot.busy;
+    final failed = _isTerminalPlaybackFailure(snapshot.status);
+    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final buttonHeight = compact
+        ? (textScale > 1.15 ? 58.0 : 64.0)
+        : (textScale > 1.15 ? 70.0 : 78.0);
+
+    final backgroundColor = playing
+        ? (isDark ? const Color(0xFF232320) : DhwaniColors.ink)
+        : DhwaniColors.signal;
+
+    final label = busy
+        ? _statusLabel(snapshot.status)
+        : playing
+        ? 'Pause'
+        : failed
+        ? 'Retry'
+        : 'Play live';
+
+    final iconWidget = busy
+        ? const SizedBox.square(
+            dimension: 22,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.4,
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+            ),
+          )
+        : Icon(
+            playing
+                ? Icons.pause_rounded
+                : failed
+                ? Icons.refresh_rounded
+                : Icons.play_arrow_rounded,
+            size: playing ? 28 : (failed ? 26 : 30),
+            color: Colors.white,
+          );
+
+    return SizedBox(
+      width: double.infinity,
+      height: buttonHeight,
+      child: Material(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(22),
+        elevation: playing ? 1 : 3,
+        shadowColor: playing
+            ? Colors.black.withValues(alpha: .2)
+            : DhwaniColors.signal.withValues(alpha: .38),
+        child: InkWell(
+          key: const Key('player-play-pause'),
+          borderRadius: BorderRadius.circular(22),
+          onTap: () {
+            HapticFeedback.selectionClick();
+            if (playing) {
+              ref.read(audioHandlerProvider).pause();
+            } else if (busy) {
+              ref.read(audioHandlerProvider).pause();
+            } else if (failed) {
+              ref.read(stationPlaybackControllerProvider).retry();
+            } else {
+              playWithMediaNotification(ref, station);
+            }
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                iconWidget,
+                const SizedBox(width: 12),
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      label,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: .4,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StationBackgroundBackdrop extends StatelessWidget {
+  const _StationBackgroundBackdrop({
+    required this.station,
+    required this.compact,
+  });
+
+  final RadioStation station;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final artworkUrl = station.artworkUrl;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 400),
+          child: ShaderMask(
+            key: ValueKey('${station.id}_${artworkUrl ?? "fallback"}'),
+            shaderCallback: (rect) {
+              return const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color(0xFF000000), // top full visibility
+                  Color(0xDD000000), // upper section clear
+                  Color(0x44000000), // middle fading
+                  Color(0x00000000), // bottom completely faded out
+                ],
+                stops: [0.0, 0.32, 0.65, 1.0],
+              ).createShader(rect);
+            },
+            blendMode: BlendMode.dstIn,
+            child: Opacity(
+              opacity: isDark ? 0.22 : 0.15,
+              child: artworkUrl != null
+                  ? CachedNetworkImage(
+                      imageUrl: artworkUrl,
+                      fit: BoxFit.cover,
+                      alignment: Alignment.topCenter,
+                      placeholder: (_, _) => Image.asset(
+                        'assets/branding/dhwani_logo.png',
+                        fit: BoxFit.cover,
+                        alignment: Alignment.topCenter,
+                      ),
+                      errorWidget: (_, _, _) => Image.asset(
+                        'assets/branding/dhwani_logo.png',
+                        fit: BoxFit.cover,
+                        alignment: Alignment.topCenter,
+                      ),
+                    )
+                  : Image.asset(
+                      'assets/branding/dhwani_logo.png',
+                      fit: BoxFit.cover,
+                      alignment: Alignment.topCenter,
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _TransportButton extends StatelessWidget {
   const _TransportButton({
     required this.tooltip,
@@ -785,7 +905,7 @@ class _FavouriteButtonState extends ConsumerState<_FavouriteButton> {
   );
 }
 
-class _RecordButton extends ConsumerStatefulWidget {
+class _RecordButton extends ConsumerWidget {
   const _RecordButton({
     required this.station,
     required this.snapshot,
@@ -798,52 +918,8 @@ class _RecordButton extends ConsumerStatefulWidget {
   final double height;
 
   @override
-  ConsumerState<_RecordButton> createState() => _RecordButtonState();
-}
-
-class _RecordButtonState extends ConsumerState<_RecordButton>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _pulseController = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1200),
-  );
-  late final Animation<double> _pulseAnimation = CurvedAnimation(
-    parent: _pulseController,
-    curve: Curves.easeInOut,
-  );
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.recording.status == RecordingStatus.recording) {
-      _pulseController.repeat(reverse: true);
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant _RecordButton oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.recording.status == RecordingStatus.recording) {
-      if (!_pulseController.isAnimating) {
-        _pulseController.repeat(reverse: true);
-      }
-    } else {
-      if (_pulseController.isAnimating) {
-        _pulseController.stop();
-        _pulseController.value = 0.0;
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _pulseController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final status = widget.recording.status;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final status = recording.status;
     final isRecording = status == RecordingStatus.recording;
     final isBusy =
         status == RecordingStatus.starting ||
@@ -855,157 +931,110 @@ class _RecordButtonState extends ConsumerState<_RecordButton>
       message: active
           ? (isBusy ? 'Processing recording…' : 'Stop recording')
           : 'Record live broadcast',
-      child: AnimatedBuilder(
-        animation: _pulseAnimation,
-        builder: (context, child) {
-          final pulseVal = isRecording ? _pulseAnimation.value : 0.0;
-          return Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: isRecording
-                  ? [
-                      BoxShadow(
-                        color: DhwaniColors.signal.withValues(
-                          alpha: 0.25 + 0.25 * pulseVal,
-                        ),
-                        blurRadius: 10 + 6 * pulseVal,
-                        spreadRadius: 1 + 2 * pulseVal,
-                      ),
-                    ]
-                  : null,
-            ),
-            child: Material(
-              color: isRecording
-                  ? DhwaniColors.signal.withValues(
-                      alpha: 0.14 + 0.10 * pulseVal,
-                    )
-                  : Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withValues(alpha: .08),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-                side: isRecording
-                    ? BorderSide(
-                        color: DhwaniColors.signal.withValues(
-                          alpha: 0.4 + 0.4 * pulseVal,
-                        ),
-                        width: 1.5,
-                      )
-                    : BorderSide(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withValues(alpha: .04),
-                        width: 1,
-                      ),
-              ),
-              child: InkWell(
-                onTap: isBusy
-                    ? null
-                    : () async {
-                        try {
-                          if (isRecording) {
-                            HapticFeedback.heavyImpact();
-                            await ref.read(recordingServiceProvider).stop();
-                          } else {
-                            final stream = widget.snapshot.stream;
-                            final confirmedLive =
-                                widget.snapshot.status ==
-                                    DhwaniPlaybackStatus.playing &&
-                                widget.snapshot.station?.id ==
-                                    widget.station.id &&
-                                stream != null;
-                            if (!confirmedLive) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Start live playback before recording.',
-                                  ),
-                                ),
-                              );
-                              return;
-                            }
-                            HapticFeedback.mediumImpact();
-                            await ref
-                                .read(recordingServiceProvider)
-                                .start(widget.station, stream);
-                          }
-                        } catch (_) {
-                          if (context.mounted) {
-                            final message = ref
-                                .read(recordingServiceProvider)
-                                .state
-                                .value
-                                .message;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  message ??
-                                      'Recording could not be completed.',
-                                ),
-                              ),
-                            );
-                          }
-                        }
-                      },
-                borderRadius: BorderRadius.circular(20),
-                child: SizedBox(
-                  height: widget.height,
-                  child: Center(
-                    child: isBusy
-                        ? const SizedBox.square(
-                            dimension: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.2,
-                              color: DhwaniColors.signal,
-                            ),
-                          )
-                        : isRecording
-                        ? Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              Container(
-                                width: 32,
-                                height: 32,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: DhwaniColors.signal.withValues(
-                                    alpha: 0.15 + 0.15 * pulseVal,
-                                  ),
-                                ),
-                              ),
-                              const Icon(
-                                Icons.stop_rounded,
-                                color: DhwaniColors.signal,
-                                size: 26,
-                              ),
-                            ],
-                          )
-                        : Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              Icon(
-                                Icons.circle_outlined,
-                                size: 26,
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurface.withValues(alpha: .65),
-                              ),
-                              Container(
-                                width: 12,
-                                height: 12,
-                                decoration: const BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: DhwaniColors.signal,
-                                ),
-                              ),
-                            ],
-                          ),
-                  ),
+      child: Material(
+        color: isRecording
+            ? DhwaniColors.signal
+            : Theme.of(context).colorScheme.onSurface.withValues(alpha: .08),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: isRecording
+              ? BorderSide.none
+              : BorderSide(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: .04),
+                  width: 1,
                 ),
-              ),
+        ),
+        child: InkWell(
+          onTap: isBusy
+              ? null
+              : () async {
+                  try {
+                    if (isRecording) {
+                      HapticFeedback.heavyImpact();
+                      await ref.read(recordingServiceProvider).stop();
+                    } else {
+                      final stream = snapshot.stream;
+                      final confirmedLive =
+                          snapshot.status == DhwaniPlaybackStatus.playing &&
+                          snapshot.station?.id == station.id &&
+                          stream != null;
+                      if (!confirmedLive) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Start live playback before recording.',
+                            ),
+                          ),
+                        );
+                        return;
+                      }
+                      HapticFeedback.mediumImpact();
+                      await ref
+                          .read(recordingServiceProvider)
+                          .start(station, stream);
+                    }
+                  } catch (_) {
+                    if (context.mounted) {
+                      final message = ref
+                          .read(recordingServiceProvider)
+                          .state
+                          .value
+                          .message;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            message ?? 'Recording could not be completed.',
+                          ),
+                        ),
+                      );
+                    }
+                  }
+                },
+          borderRadius: BorderRadius.circular(20),
+          child: SizedBox(
+            height: height,
+            child: Center(
+              child: isBusy
+                  ? SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.2,
+                        color: isRecording
+                            ? Colors.white
+                            : DhwaniColors.signal,
+                      ),
+                    )
+                  : isRecording
+                  ? const Icon(
+                      Icons.stop_rounded,
+                      color: Colors.white,
+                      size: 28,
+                    )
+                  : Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Icon(
+                          Icons.circle_outlined,
+                          size: 26,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: .65),
+                        ),
+                        Container(
+                          width: 12,
+                          height: 12,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: DhwaniColors.signal,
+                          ),
+                        ),
+                      ],
+                    ),
             ),
-          );
-        },
+          ),
+        ),
       ),
     );
   }
@@ -1545,6 +1574,3 @@ bool _isTerminalPlaybackFailure(DhwaniPlaybackStatus? status) =>
     status == DhwaniPlaybackStatus.offline ||
     status == DhwaniPlaybackStatus.geoBlocked ||
     status == DhwaniPlaybackStatus.unsupported;
-
-String _duration(Duration duration) =>
-    '${duration.inHours > 0 ? '${duration.inHours.toString().padLeft(2, '0')}:' : ''}${duration.inMinutes.remainder(60).toString().padLeft(2, '0')}:${duration.inSeconds.remainder(60).toString().padLeft(2, '0')}';

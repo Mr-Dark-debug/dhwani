@@ -4,9 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/audio/dhwani_audio_handler.dart';
+import '../core/logging/dhwani_log.dart';
+import '../core/notifications/notification_service.dart';
 import '../core/persistence/app_database.dart';
 import '../core/recording/recording_service.dart';
-import '../core/notifications/notification_service.dart';
+import '../core/settings/settings_controller.dart';
 import '../core/updater/app_update_service.dart';
 import '../data/datasources/radio_browser_api.dart';
 import '../data/models/radio_station.dart';
@@ -38,9 +40,34 @@ final appUpdateServiceProvider = Provider<AppUpdateService>(
 /// user-initiated playback. Playback still proceeds when the user declines,
 /// but Android will then keep the foreground service out of the notification
 /// drawer and media controls will be less discoverable.
-Future<void> playWithMediaNotification(WidgetRef ref) async {
+/// Requests Android's notification permission immediately before the first
+/// user-initiated playback. Playback still proceeds when the user declines,
+/// but Android will then keep the foreground service out of the notification
+/// drawer and media controls will be less discoverable.
+Future<void> playWithMediaNotification(
+  WidgetRef ref, [
+  RadioStation? explicitStation,
+]) async {
   await ref.read(notificationServiceProvider).requestPermission();
-  await ref.read(audioHandlerProvider).play();
+  final selected = explicitStation ?? ref.read(selectedStationProvider);
+  final handler = ref.read(audioHandlerProvider);
+  if (selected != null &&
+      (handler.currentStation == null ||
+          handler.currentStation!.id != selected.id)) {
+    final all = ref.read(stationsProvider).value ?? const <RadioStation>[];
+    final queue = tuningQueue(
+      all,
+      current: selected,
+      preferredScope: ref.read(settingsProvider).defaultScope,
+    );
+    await ref.read(stationPlaybackControllerProvider).tune(
+      selected,
+      queue: queue,
+      autoplay: true,
+    );
+  } else {
+    await handler.play();
+  }
 }
 
 final bootstrapProvider = FutureProvider<void>((ref) async {
@@ -79,8 +106,29 @@ final recordingSnapshotProvider = StreamProvider<RecordingSnapshot>(
 
 class SelectedStationController extends Notifier<RadioStation?> {
   @override
-  RadioStation? build() => null;
-  void select(RadioStation station) => state = station;
+  RadioStation? build() {
+    try {
+      final preferences = ref.watch(preferencesProvider);
+      final encoded = preferences.getString('lastStation');
+      if (encoded != null && encoded.trim().isNotEmpty) {
+        return RadioStation.decode(encoded);
+      }
+    } catch (error, stack) {
+      DhwaniLog.player(
+        'Failed to restore lastStation from preferences',
+        error,
+        stack,
+      );
+    }
+    return null;
+  }
+
+  void select(RadioStation station) {
+    state = station;
+    if (station.sourceType != RadioSourceType.localRecording) {
+      ref.read(preferencesProvider).setString('lastStation', station.encode());
+    }
+  }
 }
 
 final selectedStationProvider =
@@ -155,30 +203,29 @@ class StationPlaybackController {
   }
 
   Future<void> _finishRecordingBeforeSwitch(RadioStation target) async {
-    final recorder = ref.read(recordingServiceProvider);
-    final recording = recorder.state.value;
-    if (recording.station?.id == target.id ||
-        recording.status == RecordingStatus.idle ||
-        recording.status == RecordingStatus.saved ||
-        recording.status == RecordingStatus.failed) {
-      return;
-    }
-    if (recording.status == RecordingStatus.starting ||
-        recording.status == RecordingStatus.recording) {
-      await recorder.stop();
-      return;
-    }
-    await recorder.state
-        .firstWhere(
-          (value) =>
-              value.status == RecordingStatus.saved ||
-              value.status == RecordingStatus.idle ||
-              value.status == RecordingStatus.failed,
-        )
-        .timeout(const Duration(seconds: 12));
-    if (recorder.state.value.status == RecordingStatus.failed) {
-      throw StateError('Active recording could not be finalized safely.');
-    }
+    try {
+      final recorder = ref.read(recordingServiceProvider);
+      final recording = recorder.state.value;
+      if (recording.station?.id == target.id ||
+          recording.status == RecordingStatus.idle ||
+          recording.status == RecordingStatus.saved ||
+          recording.status == RecordingStatus.failed) {
+        return;
+      }
+      if (recording.status == RecordingStatus.starting ||
+          recording.status == RecordingStatus.recording) {
+        await recorder.stop();
+        return;
+      }
+      await recorder.state
+          .firstWhere(
+            (item) =>
+                item.status == RecordingStatus.idle ||
+                item.status == RecordingStatus.saved ||
+                item.status == RecordingStatus.failed,
+          )
+          .timeout(const Duration(milliseconds: 1200));
+    } catch (_) {}
   }
 }
 

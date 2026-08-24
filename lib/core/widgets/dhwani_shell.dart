@@ -186,7 +186,7 @@ class MiniPlayer extends ConsumerWidget {
                 tooltip: playing ? 'Pause' : 'Play live',
                 onPressed: () => playing
                     ? ref.read(audioHandlerProvider).pause()
-                    : playWithMediaNotification(ref),
+                    : playWithMediaNotification(ref, station),
                 icon: Icon(
                   playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
                 ),

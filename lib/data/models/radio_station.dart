@@ -161,6 +161,40 @@ class RadioStation {
   bool get canPlay => streams.any((stream) => stream.url.trim().isNotEmpty);
   bool get isDarbhanga =>
       name.toLowerCase().contains('darbhanga') && countryCode == 'IN';
+  bool get isAkashvani =>
+      directory == RadioDirectory.akashvani ||
+      name.toLowerCase().contains('akashvani') ||
+      name.toLowerCase().contains('all india radio') ||
+      tags.any((t) => t.toLowerCase().contains('akashvani'));
+
+  String? get artworkUrl {
+    final raw = favicon?.trim();
+    if (raw != null && raw.isNotEmpty) {
+      final uri = Uri.tryParse(raw);
+      if (uri != null && uri.hasScheme && uri.host.isNotEmpty) {
+        return raw;
+      }
+    }
+    if (isAkashvani) {
+      return 'https://upload.wikimedia.org/wikipedia/en/thumb/6/6f/All_India_Radio_logo.svg/512px-All_India_Radio_logo.svg.png';
+    }
+    if (homepage != null && homepage!.trim().isNotEmpty) {
+      final uri = Uri.tryParse(homepage!.trim());
+      if (uri != null && uri.host.isNotEmpty) {
+        final host = uri.host.replaceFirst(RegExp(r'^www\.'), '');
+        return 'https://www.google.com/s2/favicons?domain=$host&sz=256';
+      }
+    }
+    if (streams.isNotEmpty) {
+      final uri = Uri.tryParse(streams.first.url.trim());
+      if (uri != null && uri.host.isNotEmpty) {
+        final host = uri.host.replaceFirst(RegExp(r'^www\.'), '');
+        return 'https://www.google.com/s2/favicons?domain=$host&sz=256';
+      }
+    }
+    return null;
+  }
+
   String get bandLabel => switch (band) {
     RadioBand.am => 'AM',
     RadioBand.fm => 'FM',

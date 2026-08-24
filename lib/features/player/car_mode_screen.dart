@@ -48,7 +48,7 @@ class CarModeScreen extends ConsumerWidget {
                       label: playing ? 'Pause' : 'Play',
                       onTap: () => playing
                           ? ref.read(audioHandlerProvider).pause()
-                          : playWithMediaNotification(ref),
+                          : playWithMediaNotification(ref, snapshot?.station),
                     ),
                   ),
                   const SizedBox(width: 12),
