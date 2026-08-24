@@ -357,3 +357,14 @@ Date: 2026-08-24 (Europe/Berlin)
 - Published AAB: 111,563,230 bytes; SHA-256 `68C4EAF12733CE942B85AE1F84953377E6B2C3D9235C5D7E2BEB88143E4176B4`.
 - Published APK was downloaded again and independently inspected: package/version/build matched, APK Signature Scheme v2 verified, signer count was one, and certificate SHA-256 matched the expected v1.1 lineage.
 - Post-release maintenance: GitHub's Node 20 deprecation annotations were removed from future workflow source by selecting checkout v6, setup-java v5, upload-artifact v6, and authenticated `gh release` commands. The immutable v1.2.0 tag was not moved.
+
+## Post-release workflow runtime verification
+
+Date: 2026-08-24 (Europe/Berlin)
+
+- Commit under test: `ac07c82d29e423f99177e955e7f2b07f27cd0c4c`.
+- Workflow run: `32678362229`, manual `workflow_dispatch` on `main`.
+- Result: **passed** in 10 minutes 23 seconds.
+- Verified gates: checkout v6, setup-java v5, protected signer restore, dependency resolution, formatting, analyzer, 59 tests, signed APK/AAB builds, deterministic naming/checksums, and upload-artifact v6.
+- The GitHub Release publication step was correctly skipped because this was a branch validation rather than a version tag.
+- URL: `https://github.com/Mr-Dark-debug/dhwani/actions/runs/32678362229`.
