@@ -513,6 +513,14 @@ class _PlayerContent extends ConsumerWidget {
               },
             ),
             ListTile(
+              leading: const Icon(Icons.radio),
+              title: const Text('Retro tuner'),
+              onTap: () {
+                Navigator.pop(context);
+                context.push('/retro');
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.report_outlined),
               title: const Text('Report broken'),
               onTap: () async {

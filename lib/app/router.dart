@@ -6,6 +6,7 @@ import '../features/discover/discover_screen.dart';
 import '../features/location/location_screens.dart';
 import '../features/player/car_mode_screen.dart';
 import '../features/player/player_screen.dart';
+import '../features/player/retro_tuner_screen.dart';
 import '../features/recordings/recordings_screen.dart';
 import '../features/saved/saved_screen.dart';
 import '../features/search/search_screen.dart';
@@ -52,6 +53,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(path: '/car', builder: (_, _) => const CarModeScreen()),
+      GoRoute(path: '/retro', builder: (_, _) => const RetroTunerScreen()),
       GoRoute(
         path: '/schedules',
         builder: (_, _) => const ScheduleScreen(alarm: false),
