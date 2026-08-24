@@ -344,3 +344,16 @@ Date: 2026-08-24 (Europe/Berlin)
 - Akashvani Darbhanga remains externally unavailable from the German network used here.
 - The protected legacy signer preserves v1.1 -> v1.2 upgrades but is not a permanent Play production identity.
 - Scheduled recording/alarm remain policy-aware user-visible reminders rather than a false unattended-capture guarantee.
+
+## GitHub release verification
+
+- Commits pushed: `cd4c1d4` (functional reliability) and `9267e00` (release/evidence).
+- Tag: `v1.2.0`, pointing to `9267e00e7b15156b6e97f35079dabc908f2b0f12`.
+- Workflow run: `32677620256`, **passed** in 10 minutes 40 seconds.
+- CI gates passed: signer restore, dependency resolution, formatting, analyzer, 59 tests, signed APK/AAB build, deterministic naming/checksums, workflow artifact upload, GitHub Release publication.
+- Release: `Dhwani v1.2.0 - Reliable Radio`, published 2026-08-24T00:54:47Z.
+- URL: `https://github.com/Mr-Dark-debug/dhwani/releases/tag/v1.2.0`.
+- Published APK: 179,776,922 bytes; SHA-256 `69DEB4518E54754C0DA34F835348694949ACB7C6359CE2E55781F8942C4F0FAA`.
+- Published AAB: 111,563,230 bytes; SHA-256 `68C4EAF12733CE942B85AE1F84953377E6B2C3D9235C5D7E2BEB88143E4176B4`.
+- Published APK was downloaded again and independently inspected: package/version/build matched, APK Signature Scheme v2 verified, signer count was one, and certificate SHA-256 matched the expected v1.1 lineage.
+- Post-release maintenance: GitHub's Node 20 deprecation annotations were removed from future workflow source by selecting checkout v6, setup-java v5, upload-artifact v6, and authenticated `gh release` commands. The immutable v1.2.0 tag was not moved.

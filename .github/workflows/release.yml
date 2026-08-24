@@ -16,12 +16,12 @@ jobs:
 
     steps:
       - name: Check out tagged source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Set up Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "21"
@@ -89,7 +89,7 @@ jobs:
           echo "sums=$SUMS" >> "$GITHUB_OUTPUT"
 
       - name: Upload workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: dhwani-android-release
           path: dist/release/*
@@ -97,14 +97,18 @@ jobs:
 
       - name: Publish GitHub release assets
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          name: Dhwani ${{ github.ref_name }} - Reliable Radio
-          body_path: dist/RELEASE_NOTES.md
-          files: |
-            dist/release/${{ steps.artifacts.outputs.apk }}
-            dist/release/${{ steps.artifacts.outputs.apk }}.sha256
-            dist/release/${{ steps.artifacts.outputs.aab }}
-            dist/release/${{ steps.artifacts.outputs.sums }}
-          fail_on_unmatched_files: true
-          overwrite_files: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          APK="dist/release/${{ steps.artifacts.outputs.apk }}"
+          AAB="dist/release/${{ steps.artifacts.outputs.aab }}"
+          SUMS="dist/release/${{ steps.artifacts.outputs.sums }}"
+          TITLE="Dhwani $GITHUB_REF_NAME - Reliable Radio"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release edit "$GITHUB_REF_NAME" --title "$TITLE" --notes-file dist/RELEASE_NOTES.md
+            gh release upload "$GITHUB_REF_NAME" "$APK" "$APK.sha256" "$AAB" "$SUMS" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "$APK" "$APK.sha256" "$AAB" "$SUMS" \
+              --verify-tag --title "$TITLE" --notes-file dist/RELEASE_NOTES.md
+          fi

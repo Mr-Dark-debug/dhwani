@@ -934,3 +934,33 @@ Together they distinguish app state-machine correctness, platform integration, a
 
 ### Revisit if
 Flutter gains an official lightweight media integration-test harness with equivalent decoder coverage.
+
+## DEC-0032 — Keep release automation on supported Node 24 actions
+
+Date: 2026-08-24
+Status: Accepted
+
+### Question
+How should the release workflow respond to GitHub's Node 20 action deprecation annotations?
+
+### Options considered
+- Ignore the warnings because v1.2.0 published successfully
+- Keep deprecated action majors until they fail
+- Move GitHub-owned actions to their supported Node 24 majors and use the authenticated GitHub CLI for idempotent release publication
+
+### Research / evidence
+- The successful v1.2.0 job warned that checkout v4, setup-java v4, upload-artifact v4, and the third-party release action were being forced from deprecated Node 20 to Node 24.
+- Official GitHub repositories document checkout v6, setup-java v5, and upload-artifact v6 on Node 24 for current hosted runners.
+- `gh release create/edit/upload --clobber` is already authenticated by the job token and avoids an additional third-party JavaScript action for publication.
+
+### Decision
+Use `actions/checkout@v6`, `actions/setup-java@v5`, and `actions/upload-artifact@v6`. Publish idempotently with the preinstalled GitHub CLI and `github.token`.
+
+### Why
+Future tag builds avoid a known runtime deprecation and keep the externally mutating release step small, reviewable, and first-party authenticated.
+
+### Trade-offs
+- These action majors require a current GitHub runner; Dhwani uses GitHub-hosted `ubuntu-latest`, which satisfies that requirement.
+
+### Revisit if
+GitHub changes hosted-runner compatibility or offers a first-party dedicated release-upload action.
