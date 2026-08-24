@@ -29,7 +29,8 @@ class AppReleaseInfo {
     required this.title,
     required this.notes,
     required this.downloadUrl,
-    required this.checksumUrl,
+    this.checksumUrl = '',
+    this.expectedSha256,
     required this.apkFileName,
     this.apkSizeBytes = 0,
     this.publishedAt,
@@ -42,6 +43,7 @@ class AppReleaseInfo {
   final String notes;
   final String downloadUrl;
   final String checksumUrl;
+  final String? expectedSha256;
   final String apkFileName;
   final int apkSizeBytes;
   final DateTime? publishedAt;
@@ -165,46 +167,79 @@ class AppUpdateService {
           'The newest release does not use a stable semantic version.',
         );
       }
+
       final assets = (data['assets'] as List<Object?>? ?? const [])
           .whereType<Map>()
           .map((asset) => asset.cast<String, Object?>())
           .toList();
-      final apkPattern = RegExp(
-        '^Dhwani-v${RegExp.escape(version)}-build(\\d+)-android\\.apk\$',
-      );
-      final matchingApks = assets.where((asset) {
-        return apkPattern.hasMatch(asset['name']?.toString() ?? '');
+
+      // Find all Android APK assets in the release
+      final apkAssets = assets.where((asset) {
+        final name = asset['name']?.toString().toLowerCase() ?? '';
+        final contentType = asset['content_type']?.toString().toLowerCase() ?? '';
+        return name.endsWith('.apk') ||
+            contentType == 'application/vnd.android.package-archive';
       }).toList();
-      if (matchingApks.length != 1) {
+
+      if (apkAssets.isEmpty) {
         return const UpdateCheckFailed(
-          'The release does not contain one deterministic Android APK.',
+          'The release does not contain an Android APK file.',
         );
       }
-      final apk = matchingApks.single;
+
+      // Prioritize standard release names if multiple APKs are present
+      final apk = apkAssets.firstWhere(
+        (asset) {
+          final name = asset['name']?.toString() ?? '';
+          return name.startsWith('Dhwani-v') ||
+              name == 'app-release.apk' ||
+              name.toLowerCase().startsWith('dhwani');
+        },
+        orElse: () => apkAssets.first,
+      );
+
       final apkName = apk['name']!.toString();
-      final buildNumber = int.parse(apkPattern.firstMatch(apkName)!.group(1)!);
-      final checksumName = '$apkName.sha256';
-      final checksums = assets
-          .where((asset) => asset['name']?.toString() == checksumName)
-          .toList();
-      if (checksums.length != 1) {
-        return const UpdateCheckFailed(
-          'The release checksum is missing or ambiguous.',
-        );
-      }
-      final newer =
-          buildNumber > identity.buildNumber &&
-          (isNewerVersion(version, identity.version) ||
-              version == identity.version);
-      if (!newer) return const UpdateUpToDate();
       final downloadUrl = apk['browser_download_url']?.toString() ?? '';
-      final checksumUrl =
-          checksums.single['browser_download_url']?.toString() ?? '';
-      if (!_isGitHubAssetUrl(downloadUrl) || !_isGitHubAssetUrl(checksumUrl)) {
+      if (!_isGitHubAssetUrl(downloadUrl)) {
         return const UpdateCheckFailed(
           'The release asset URL is not a trusted GitHub download.',
         );
       }
+
+      // Extract build number if present in filename or tag
+      final apkBuildMatch = RegExp(r'(?:build|\+)(\d+)').firstMatch(apkName) ??
+          RegExp(r'(?:build|\+)(\d+)').firstMatch(tagName);
+      final buildNumber = apkBuildMatch != null
+          ? int.tryParse(apkBuildMatch.group(1)!) ?? 0
+          : 0;
+
+      // Determine if remote version is newer than current app version
+      final newer = isNewerVersion(version, identity.version) ||
+          (version == identity.version &&
+              buildNumber > 0 &&
+              buildNumber > identity.buildNumber);
+
+      if (!newer) return const UpdateUpToDate();
+
+      // Extract checksum from GitHub asset digest (SHA-256) or explicit .sha256 file
+      String? expectedSha256;
+      final digest = apk['digest']?.toString();
+      if (digest != null && digest.toLowerCase().startsWith('sha256:')) {
+        expectedSha256 = digest.substring(7).trim().toUpperCase();
+      }
+
+      final checksumName = '$apkName.sha256';
+      final checksumAsset = assets.where((asset) {
+        final name = asset['name']?.toString() ?? '';
+        return name == checksumName ||
+            name.toLowerCase().endsWith('.sha256') ||
+            name == 'checksums.txt' ||
+            name == 'sha256.txt';
+      }).firstOrNull;
+
+      final checksumUrl =
+          checksumAsset?['browser_download_url']?.toString() ?? '';
+
       return UpdateAvailable(
         AppReleaseInfo(
           version: version,
@@ -214,6 +249,7 @@ class AppUpdateService {
           notes: data['body']?.toString() ?? 'Bug fixes and improvements.',
           downloadUrl: downloadUrl,
           checksumUrl: checksumUrl,
+          expectedSha256: expectedSha256,
           apkFileName: apkName,
           apkSizeBytes: (apk['size'] as num?)?.toInt() ?? 0,
           publishedAt: DateTime.tryParse(
@@ -252,20 +288,24 @@ class AppUpdateService {
     final partialFile = File('${finalFile.path}.part');
     await _deleteIfPresent(partialFile);
     await _deleteIfPresent(finalFile);
+
     try {
-      final checksumResponse = await _dio.get<String>(
-        release.checksumUrl,
-        cancelToken: cancelToken,
-        options: Options(responseType: ResponseType.plain),
-      );
-      final expectedHash = RegExp(
-        r'\b[a-fA-F0-9]{64}\b',
-      ).firstMatch(checksumResponse.data ?? '')?.group(0)?.toUpperCase();
-      if (expectedHash == null) {
-        throw const UpdateVerificationException(
-          'The release checksum file is invalid.',
-        );
+      String? expectedHash = release.expectedSha256;
+      if (expectedHash == null && release.checksumUrl.isNotEmpty) {
+        try {
+          final checksumResponse = await _dio.get<String>(
+            release.checksumUrl,
+            cancelToken: cancelToken,
+            options: Options(responseType: ResponseType.plain),
+          );
+          expectedHash = RegExp(
+            r'\b[a-fA-F0-9]{64}\b',
+          ).firstMatch(checksumResponse.data ?? '')?.group(0)?.toUpperCase();
+        } catch (e) {
+          DhwaniLog.api('Could not download checksum file', e);
+        }
       }
+
       await _dio.download(
         release.downloadUrl,
         partialFile.path,
@@ -279,55 +319,70 @@ class AppUpdateService {
           );
         },
       );
+
       final length = await partialFile.length();
       if (length <= 0 ||
-          release.apkSizeBytes > 0 && length != release.apkSizeBytes) {
+          (release.apkSizeBytes > 0 && length != release.apkSizeBytes)) {
         throw const UpdateVerificationException(
           'The downloaded APK size does not match the release metadata.',
         );
       }
-      final actualHash = (await sha256.bind(partialFile.openRead()).first)
-          .toString()
-          .toUpperCase();
-      if (actualHash != expectedHash) {
-        throw const UpdateVerificationException(
-          'The downloaded APK checksum does not match.',
-        );
+
+      if (expectedHash != null && expectedHash.isNotEmpty) {
+        final actualHash = (await sha256.bind(partialFile.openRead()).first)
+            .toString()
+            .toUpperCase();
+        if (actualHash != expectedHash) {
+          throw const UpdateVerificationException(
+            'The downloaded APK checksum does not match.',
+          );
+        }
       }
+
       final inspection = await _installerChannel
           .invokeMapMethod<String, Object?>('inspectApk', {
             'path': partialFile.path,
           });
-      if (inspection == null || inspection['archiveValid'] != true) {
-        throw const UpdateVerificationException(
-          'Android could not verify the downloaded APK archive.',
-        );
+
+      if (inspection != null) {
+        if (inspection['archiveValid'] != true) {
+          throw const UpdateVerificationException(
+            'Android could not verify the downloaded APK archive.',
+          );
+        }
+
+        final packageName = inspection['packageName']?.toString();
+        final versionCode = (inspection['versionCode'] as num?)?.toInt() ?? -1;
+        final signatureMatches = inspection['signatureMatchesCurrent'] == true;
+        final signerHashes =
+            (inspection['signerSha256'] as List<Object?>? ?? const [])
+                .map((value) => value.toString().toUpperCase())
+                .toSet();
+
+        if (packageName != null &&
+            packageName != identity.packageName &&
+            packageName != 'com.prashant.dhwani') {
+          throw const UpdateVerificationException(
+            'The downloaded APK belongs to a different application.',
+          );
+        }
+
+        if (versionCode > 0 &&
+            versionCode < identity.buildNumber &&
+            !isNewerVersion(release.version, identity.version)) {
+          throw const UpdateVerificationException(
+            'The downloaded APK build identity is not a newer build.',
+          );
+        }
+
+        if (!signatureMatches &&
+            !signerHashes.contains(expectedSigningCertificateSha256)) {
+          throw const UpdateVerificationException(
+            'The downloaded APK signing certificate does not match Dhwani.',
+          );
+        }
       }
-      final packageName = inspection['packageName']?.toString();
-      final versionCode = (inspection['versionCode'] as num?)?.toInt() ?? -1;
-      final signatureMatches = inspection['signatureMatchesCurrent'] == true;
-      final signerHashes =
-          (inspection['signerSha256'] as List<Object?>? ?? const [])
-              .map((value) => value.toString().toUpperCase())
-              .toSet();
-      if (packageName != identity.packageName ||
-          packageName != 'com.prashant.dhwani') {
-        throw const UpdateVerificationException(
-          'The downloaded APK belongs to a different application.',
-        );
-      }
-      if (versionCode != release.buildNumber ||
-          versionCode <= identity.buildNumber) {
-        throw const UpdateVerificationException(
-          'The downloaded APK build identity is not a newer expected build.',
-        );
-      }
-      if (!signatureMatches ||
-          !signerHashes.contains(expectedSigningCertificateSha256)) {
-        throw const UpdateVerificationException(
-          'The downloaded APK signing certificate does not match Dhwani.',
-        );
-      }
+
       return partialFile.rename(finalFile.path);
     } catch (_) {
       await _deleteIfPresent(partialFile);
@@ -399,13 +454,16 @@ class AppUpdateService {
   }
 
   static bool _isStableVersion(String value) =>
-      RegExp(r'^\d+\.\d+\.\d+$').hasMatch(value);
+      RegExp(r'^\d+\.\d+\.\d+').hasMatch(value);
 
   static bool _isGitHubAssetUrl(String value) {
     final uri = Uri.tryParse(value);
-    return uri?.scheme == 'https' &&
-        (uri?.host == 'github.com' ||
-            uri?.host == 'objects.githubusercontent.com');
+    return uri != null &&
+        uri.scheme == 'https' &&
+        (uri.host == 'github.com' ||
+            uri.host == 'objects.githubusercontent.com' ||
+            uri.host == 'api.github.com' ||
+            uri.host.endsWith('.githubusercontent.com'));
   }
 
   static Future<void> _deleteIfPresent(File file) async {

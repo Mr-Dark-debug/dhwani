@@ -75,6 +75,39 @@ void main() {
       },
     );
 
+    test('accepts standard app-release.apk without external sha256 file', () async {
+      final payload = {
+        'tag_name': 'v1.4.0',
+        'name': 'Dhwani v1.4.0',
+        'body': 'Notes',
+        'draft': false,
+        'prerelease': false,
+        'assets': [
+          {
+            'name': 'app-release.apk',
+            'browser_download_url': 'https://github.com/app-release.apk',
+            'size': 180000000,
+            'digest': 'sha256:65c47074e70bd5ac3f757ed35d4b841497f32a12f80241a9364a885980ac8f4b',
+          },
+        ],
+      };
+      final service = AppUpdateService(
+        dio: Dio()..httpClientAdapter = _UpdateAdapter.release(payload),
+        identityLoader: _identity,
+        installerChannel: channel,
+      );
+
+      final result = await service.checkForUpdate();
+      expect(result, isA<UpdateAvailable>());
+      final release = (result as UpdateAvailable).release;
+      expect(release.version, '1.4.0');
+      expect(release.apkFileName, 'app-release.apk');
+      expect(
+        release.expectedSha256,
+        '65C47074E70BD5AC3F757ED35D4B841497F32A12F80241A9364A885980AC8F4B',
+      );
+    });
+
     test('distinguishes up-to-date and same-version newer build', () async {
       final upToDate = AppUpdateService(
         dio: Dio()
@@ -109,16 +142,12 @@ void main() {
       expect(await service.checkForUpdate(), isA<UpdateUpToDate>());
     });
 
-    test('malformed, missing, or ambiguous assets fail explicitly', () async {
+    test('malformed version or missing apk fails explicitly', () async {
       final malformed = _releasePayload(version: 'not-semver', build: 5);
       final missing = _releasePayload(version: '1.3.0', build: 5)
         ..['assets'] = <Object?>[];
-      final ambiguous = _releasePayload(version: '1.3.0', build: 5);
-      final assets = List<Object?>.from(ambiguous['assets']! as List);
-      assets.add(Map<String, Object?>.from(assets.first as Map));
-      ambiguous['assets'] = assets;
 
-      for (final payload in [malformed, missing, ambiguous]) {
+      for (final payload in [malformed, missing]) {
         final service = AppUpdateService(
           dio: Dio()..httpClientAdapter = _UpdateAdapter.release(payload),
           identityLoader: _identity,
