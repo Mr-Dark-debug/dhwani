@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Dhwani</string>
+    <string name="retro_widget_name">Retro Radio Tuner</string>
+    <string name="retro_widget_description">Analog FM radio tuner widget with live frequency display and playback controls.</string>
+</resources>

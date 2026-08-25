@@ -3,8 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../core/settings/settings_controller.dart';
 import '../core/logging/dhwani_log.dart';
+import '../core/settings/settings_controller.dart';
+import '../core/widgets/home_widget_sync.dart';
 import 'providers.dart';
 import 'router.dart';
 import 'theme/dhwani_theme.dart';
@@ -68,6 +69,13 @@ class _DhwaniAppState extends ConsumerState<DhwaniApp>
             next.equalizerPreset,
             customGains: next.equalizerGains,
           );
+    });
+
+    ref.listen(favouritesProvider, (previous, next) {
+      final favs = next.value;
+      if (favs != null) {
+        unawaited(HomeWidgetSync.update(favourites: favs));
+      }
     });
 
     final router = ref.watch(routerProvider);

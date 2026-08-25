@@ -9,6 +9,7 @@ import 'package:rxdart/rxdart.dart';
 
 import '../../data/models/radio_station.dart';
 import '../logging/dhwani_log.dart';
+import '../widgets/home_widget_sync.dart';
 import 'dhwani_audio_engine.dart';
 import 'playback_failure.dart';
 
@@ -1020,6 +1021,14 @@ class DhwaniAudioHandler extends BaseAudioHandler
       ),
     );
     _broadcastMediaState();
+    unawaited(
+      HomeWidgetSync.update(
+        station: station ?? _currentStation,
+        status: status,
+        icyTitle: _icyTitle,
+        stationIndex: _index >= 0 ? _index : null,
+      ),
+    );
   }
 
   void _broadcastMediaState() {

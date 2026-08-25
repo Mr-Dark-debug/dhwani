@@ -137,6 +137,42 @@ class MainActivity : AudioServiceActivity() {
                     else -> result.notImplemented()
                 }
             }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.prashant.dhwani/widget")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "updateWidgetState" -> {
+                        try {
+                            val data = call.arguments as? Map<*, *>
+                            if (data != null) {
+                                val prefs = getSharedPreferences(
+                                    RetroTunerWidgetProvider.PREFS_NAME,
+                                    android.content.Context.MODE_PRIVATE
+                                )
+                                val editor = prefs.edit()
+                                for ((key, value) in data) {
+                                    if (key is String) {
+                                        when (value) {
+                                            is String -> editor.putString(key, value)
+                                            is Boolean -> editor.putBoolean(key, value)
+                                            is Int -> editor.putInt(key, value)
+                                            is Long -> editor.putLong(key, value)
+                                            is Float -> editor.putFloat(key, value)
+                                            is Double -> editor.putFloat(key, value.toFloat())
+                                        }
+                                    }
+                                }
+                                editor.apply()
+                                RetroTunerWidgetProvider.updateAllWidgets(this)
+                            }
+                            result.success(true)
+                        } catch (e: Exception) {
+                            result.error("widget_error", e.message, null)
+                        }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {

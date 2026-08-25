@@ -63,6 +63,23 @@
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
             </intent-filter>
         </receiver>
+        <receiver
+            android:name=".RetroTunerWidgetProvider"
+            android:label="@string/retro_widget_name"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.prashant.dhwani.ACTION_PLAY_PAUSE" />
+                <action android:name="com.prashant.dhwani.ACTION_NEXT" />
+                <action android:name="com.prashant.dhwani.ACTION_PREVIOUS" />
+                <action android:name="com.prashant.dhwani.ACTION_REWIND" />
+                <action android:name="com.prashant.dhwani.ACTION_FAST_FORWARD" />
+                <action android:name="com.prashant.dhwani.ACTION_TUNE_FAV" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/retro_tuner_widget_info" />
+        </receiver>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
