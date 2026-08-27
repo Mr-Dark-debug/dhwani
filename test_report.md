@@ -368,3 +368,28 @@ Date: 2026-08-24 (Europe/Berlin)
 - Verified gates: checkout v6, setup-java v5, protected signer restore, dependency resolution, formatting, analyzer, 59 tests, signed APK/AAB builds, deterministic naming/checksums, and upload-artifact v6.
 - The GitHub Release publication step was correctly skipped because this was a branch validation rather than a version tag.
 - URL: `https://github.com/Mr-Dark-debug/dhwani/actions/runs/32678362229`.
+
+## v1.4.1 fresh-sideload playback verification
+
+Date: 2026-08-27 (Europe/Berlin)
+
+- Device: physical Pixel 10, serial `62131VDCR000KJ`, Android API 36.
+- `flutter analyze`: **No issues found**.
+- `flutter test --exclude-tags integration`: **65 passed, 0 failed**.
+- Fresh-install live playback: Radio Swiss Jazz reached **PLAYING**, then **PAUSED**, and stopped on the physical device.
+- Playback started with `POST_NOTIFICATIONS` denied; the player no longer waits for that permission.
+- A transient `ConnectivityResult.none` no longer vetoes a working transport or stops healthy audio.
+- Android uses native ExoPlayer request headers instead of just_audio's localhost header proxy.
+- Darbhanga probe terminated cleanly after trying `radio.wavespb.com` first and legacy `air.pc.cdn.bitgravity.com` second. Neither broadcaster endpoint served audio from the German test network.
+
+### v1.4.1 local release candidate
+
+- Package: `com.prashant.dhwani`; version `1.4.1`; build `7`; min SDK 24; target/compile SDK 36.
+- Release APK: `dist/release/Dhwani-v1.4.1-build7-android.apk`, 179,842,771 bytes.
+- APK SHA-256: `793C9A0E57CD5429BB298D9ACC4934D7992AB8021E7F1005E0049E42D89C19E7`.
+- Release AAB: `dist/release/Dhwani-v1.4.1-build7-android.aab`, 111,631,381 bytes.
+- AAB SHA-256: `353A1ACBBF01A04888C019DFDD228FDBA26FB93123BD99B8E85D9458C37ABCA6`.
+- APK Signature Scheme v2: valid; one signer; certificate SHA-256 `F11E976967911C8E585DD88817D6587076A802840699EEBF7E3C8304BEDBE3B5`.
+- `zipalign -c -P 16 -v 4`: verification successful.
+- Installed release verification: install succeeded; package reported version 1.4.1/build 7; `INTERNET` was granted and `POST_NOTIFICATIONS` remained denied; launch succeeded and the process exposed the expected media session.
+- Genuine boundary: Darbhanga's current upstream is discoverable and attempted correctly, but audible playback cannot be certified from the German network because the broadcaster did not deliver audio there.

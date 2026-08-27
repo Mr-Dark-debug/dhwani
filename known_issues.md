@@ -61,3 +61,15 @@ The matching v1.1.0 signer is now stored only in encrypted GitHub repository sec
 Status: **RESOLVED**
 
 The first combined integration run cancelled Radio Swiss Jazz while ExoPlayer was still initializing. Per-source startup is now bounded at 10 seconds with a 24-second whole-station budget. The real Android smoke retest reached PLAYING in 15 seconds including app/test startup and then paused cleanly.
+
+## 2026-08-27 — Fresh sideload could reject every station before requesting it
+
+Status: **RESOLVED**
+
+Playback waited for notification permission, treated a transient connectivity `none` result as authoritative, and routed request headers through just_audio's localhost proxy. Dhwani 1.4.1 removes the permission gate, treats the actual stream request as authoritative, ignores transient connectivity loss while audio is healthy, and uses native ExoPlayer headers. A clean-install physical Pixel 10 live-stream test passed with notification permission unset.
+
+## 2026-08-27 — Darbhanga feed rejected on Android
+
+Status: **RESOLVED**
+
+GitHub served the JSON feed as `text/plain`, so Dio returned a String and the app rejected it as a non-list. Dhwani now decodes either raw JSON text or an already-decoded list, keeps the current official WAVES URL when live-page refresh fails, and ranks it ahead of legacy fallbacks.

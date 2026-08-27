@@ -94,3 +94,13 @@ TuneIn, Simple Radio, myTuner, Radio Garden, and Radioplayer were reviewed at a 
 - Dio 5.9.2's public `HttpClientAdapter` contract supports deterministic mirror-failure and malformed-response tests without real network dependence.
 - A dedicated Android notification status icon is derived from Dhwani's monochrome adaptive-icon mark; the colored launcher icon is no longer used as a small notification glyph.
 - Recording backend correction: API 36 testing proved `ffmpeg_kit_flutter_new_audio` 2.5.2 was compiled without HTTPS protocol support. It was rejected and replaced by `ffmpeg_kit_flutter_new_full` 2.5.2, whose current pub.dev metadata identifies FFmpeg 8.1.2, Android API 24+, Android/iOS/Linux/macOS/Windows support, no GPL components, and LGPL-3.0 licensing. A real HTTPS MP3 recording passed after the replacement.
+
+## 2026-08-27 — Fresh-install playback and Darbhanga refresh
+
+- Android documents `INTERNET` and `ACCESS_NETWORK_STATE` as normal permissions granted at install time; they have no runtime prompt: https://developer.android.com/develop/connectivity/network-ops/connecting
+- Android documents that apps do not need `POST_NOTIFICATIONS` to launch a foreground service and that media-session notifications are exempt. Dhwani therefore requests notification permission for reminders, not as a prerequisite for playback: https://developer.android.com/develop/ui/compose/notifications/notification-permission
+- Android media playback requires the already-declared `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK`, and `mediaPlayback` service type, with no media runtime prerequisite: https://developer.android.com/media/media3/session/background-playback
+- `just_audio` 0.10.6 documents native Android request properties through ExoPlayer when `useProxyForRequestHeaders` is false. Dhwani selected this path after the default localhost proxy surfaced device-dependent transport errors.
+- The public Akashvani feed was served as `text/plain` on the physical Android device. Dio therefore returned a JSON String; accepting both String and decoded List fixed the reproduced `FormatException`.
+- On 2026-08-27 the official live page still published Darbhanga as `https://radio.wavespb.com/live/8e074285599ed45d/8e074285599ed45d.m3u8`; the GitHub feed still carried the older BitGravity `pbaudio160` URL.
+- Distributed HTTP probes reached the WAVES endpoint with HTTP 302 from 20 nodes, including Kolkata, while the connected Pixel and Windows host in Germany received a connection reset. This supports a network/upstream boundary rather than a missing Android permission.

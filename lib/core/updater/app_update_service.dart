@@ -176,7 +176,8 @@ class AppUpdateService {
       // Find all Android APK assets in the release
       final apkAssets = assets.where((asset) {
         final name = asset['name']?.toString().toLowerCase() ?? '';
-        final contentType = asset['content_type']?.toString().toLowerCase() ?? '';
+        final contentType =
+            asset['content_type']?.toString().toLowerCase() ?? '';
         return name.endsWith('.apk') ||
             contentType == 'application/vnd.android.package-archive';
       }).toList();
@@ -188,15 +189,12 @@ class AppUpdateService {
       }
 
       // Prioritize standard release names if multiple APKs are present
-      final apk = apkAssets.firstWhere(
-        (asset) {
-          final name = asset['name']?.toString() ?? '';
-          return name.startsWith('Dhwani-v') ||
-              name == 'app-release.apk' ||
-              name.toLowerCase().startsWith('dhwani');
-        },
-        orElse: () => apkAssets.first,
-      );
+      final apk = apkAssets.firstWhere((asset) {
+        final name = asset['name']?.toString() ?? '';
+        return name.startsWith('Dhwani-v') ||
+            name == 'app-release.apk' ||
+            name.toLowerCase().startsWith('dhwani');
+      }, orElse: () => apkAssets.first);
 
       final apkName = apk['name']!.toString();
       final downloadUrl = apk['browser_download_url']?.toString() ?? '';
@@ -207,14 +205,16 @@ class AppUpdateService {
       }
 
       // Extract build number if present in filename or tag
-      final apkBuildMatch = RegExp(r'(?:build|\+)(\d+)').firstMatch(apkName) ??
+      final apkBuildMatch =
+          RegExp(r'(?:build|\+)(\d+)').firstMatch(apkName) ??
           RegExp(r'(?:build|\+)(\d+)').firstMatch(tagName);
       final buildNumber = apkBuildMatch != null
           ? int.tryParse(apkBuildMatch.group(1)!) ?? 0
           : 0;
 
       // Determine if remote version is newer than current app version
-      final newer = isNewerVersion(version, identity.version) ||
+      final newer =
+          isNewerVersion(version, identity.version) ||
           (version == identity.version &&
               buildNumber > 0 &&
               buildNumber > identity.buildNumber);

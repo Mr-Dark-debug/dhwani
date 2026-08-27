@@ -93,7 +93,7 @@ Native FFmpeg libraries make the universal APK large. The AAB lets Google Play d
 
 ## Android permissions
 
-The Android build uses internet/network-state access, wake lock, media playback foreground service, and notification permission when the user schedules reminders. It does **not** request microphone, location, contacts, account, broad media, or legacy external-storage permissions.
+The Android build uses install-time internet/network-state access, wake lock, and a typed media playback foreground service. Android media-session playback does not wait for notification permission; the app requests that permission contextually when the user schedules reminders. It does **not** request microphone, location, contacts, account, broad media, or legacy external-storage permissions.
 
 ## Setup
 
@@ -120,6 +120,7 @@ flutter test
 flutter test integration_test/onboarding_flow_test.dart -d emulator-5554
 flutter test integration_test/custom_station_flow_test.dart -d emulator-5554
 flutter test integration_test/live_playback_smoke_test.dart -d emulator-5554
+flutter test integration_test/darbhanga_live_probe_test.dart -d emulator-5554
 flutter test integration_test/controlled_stream_server_test.dart -d emulator-5554
 flutter test integration_test/recording_smoke_test.dart -d emulator-5554
 ```

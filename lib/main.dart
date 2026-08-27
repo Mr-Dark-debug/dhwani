@@ -21,17 +21,19 @@ import 'data/repositories/catalogue_repository.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final previousFlutterErrorHandler = FlutterError.onError;
   FlutterError.onError = (details) {
-    FlutterError.presentError(details);
+    previousFlutterErrorHandler?.call(details);
     DhwaniLog.android(
       'Uncaught Flutter framework error',
       details.exception,
       details.stack,
     );
   };
+  final previousPlatformErrorHandler = PlatformDispatcher.instance.onError;
   PlatformDispatcher.instance.onError = (error, stack) {
     DhwaniLog.android('Uncaught platform callback error', error, stack);
-    return true;
+    return previousPlatformErrorHandler?.call(error, stack) ?? true;
   };
   await _startApp();
 }

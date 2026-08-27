@@ -86,6 +86,31 @@ void main() {
       await handler.disposeHandler();
     });
 
+    test('official WAVES streams receive Akashvani request context', () async {
+      final engine = FakeAudioEngine();
+      final handler = _handler(engine);
+      final station = _station(
+        'darbhanga',
+        'https://radio.wavespb.com/live/current/darbhanga.m3u8',
+      );
+
+      await handler.tuneStation(
+        station,
+        queueStations: [station],
+        autoplay: true,
+      );
+
+      expect(
+        engine.loadedHeaders.single?['Origin'],
+        'https://akashvani.gov.in',
+      );
+      expect(
+        engine.loadedHeaders.single?['Referer'],
+        'https://akashvani.gov.in/radio/live.php',
+      );
+      await handler.disposeHandler();
+    });
+
     test(
       'failed connection never creates a listening-history session',
       () async {
@@ -166,7 +191,7 @@ void main() {
       await handler.disposeHandler();
     });
 
-    test('known offline state terminates without loading a source', () async {
+    test('advisory offline state does not veto a working stream', () async {
       final engine = FakeAudioEngine();
       final handler = _handler(
         engine,
@@ -180,10 +205,44 @@ void main() {
         autoplay: true,
       );
 
-      expect(handler.snapshot.value.status, DhwaniPlaybackStatus.offline);
-      expect(engine.loadedUrls, isEmpty);
+      expect(handler.snapshot.value.status, DhwaniPlaybackStatus.playing);
+      expect(engine.loadedUrls, ['https://offline.test/live']);
       await handler.disposeHandler();
     });
+
+    test(
+      'transient connectivity-none event does not stop healthy audio',
+      () async {
+        final changes = StreamController<List<ConnectivityResult>>.broadcast();
+        final engine = FakeAudioEngine();
+        final handler = DhwaniAudioHandler(
+          engine: engine,
+          enablePlatformIntegrations: false,
+          connectivityCheck: () async => [ConnectivityResult.wifi],
+          connectivityChanges: changes.stream,
+          perSourceTimeout: const Duration(milliseconds: 100),
+          stationTimeout: const Duration(milliseconds: 300),
+          playConfirmationTimeout: const Duration(milliseconds: 100),
+          bufferingTimeout: const Duration(milliseconds: 100),
+        );
+        final station = _station('handover', 'https://handover.test/live');
+        await handler.tuneStation(
+          station,
+          queueStations: [station],
+          autoplay: true,
+        );
+
+        changes.add([ConnectivityResult.none]);
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        changes.add([ConnectivityResult.wifi]);
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+
+        expect(handler.snapshot.value.status, DhwaniPlaybackStatus.playing);
+        expect(engine.loadedUrls, ['https://handover.test/live']);
+        await changes.close();
+        await handler.disposeHandler();
+      },
+    );
 
     test('runtime stream end reconnects once and returns to playing', () async {
       final engine = FakeAudioEngine();
@@ -320,6 +379,7 @@ class FakeAudioEngine implements DhwaniAudioEngine {
   final Map<String, int> failuresRemaining;
   final bool endlessPlayFuture;
   final List<String> loadedUrls = [];
+  final List<Map<String, String>?> loadedHeaders = [];
   final _states = StreamController<PlayerState>.broadcast();
   final _errors = StreamController<PlayerException>.broadcast();
   final _metadata = StreamController<IcyMetadata?>.broadcast();
@@ -349,6 +409,7 @@ class FakeAudioEngine implements DhwaniAudioEngine {
   @override
   Future<Duration?> setUrl(String url, {Map<String, String>? headers}) async {
     loadedUrls.add(url);
+    loadedHeaders.add(headers);
     _playing = false;
     _processingState = ProcessingState.loading;
     _states.add(PlayerState(false, ProcessingState.loading));

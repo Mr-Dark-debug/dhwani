@@ -22,11 +22,25 @@ void main() {
         'https://radio.wavespb.com/live/current/darbhanga.m3u8',
       );
       expect(station.streams.first.hls, isTrue);
+      expect(station.streams.last.url, 'https://legacy.test/darbhanga.m3u8');
     },
   );
+
+  test('known-current Darbhanga URL survives live-page failure', () async {
+    final dio = Dio()
+      ..httpClientAdapter = _AkashvaniAdapter(failLivePage: true);
+    final station = (await AkashvaniApi(dio: dio).stations()).single;
+
+    expect(station.streams.first.url, AkashvaniApi.currentDarbhangaStreamUrl);
+    expect(station.streams.last.url, 'https://legacy.test/darbhanga.m3u8');
+  });
 }
 
 class _AkashvaniAdapter implements HttpClientAdapter {
+  _AkashvaniAdapter({this.failLivePage = false});
+
+  final bool failLivePage;
+
   @override
   Future<ResponseBody> fetch(
     RequestOptions options,
@@ -46,8 +60,17 @@ class _AkashvaniAdapter implements HttpClientAdapter {
         ]),
         200,
         headers: {
-          Headers.contentTypeHeader: ['application/json'],
+          // raw.githubusercontent.com currently serves this JSON feed as
+          // text/plain, so Android receives a String rather than a decoded List.
+          Headers.contentTypeHeader: ['text/plain'],
         },
+      );
+    }
+    if (failLivePage) {
+      throw DioException(
+        requestOptions: options,
+        type: DioExceptionType.connectionError,
+        error: 'simulated official page failure',
       );
     }
     return ResponseBody.fromString(

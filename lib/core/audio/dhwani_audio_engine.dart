@@ -26,6 +26,10 @@ class JustAudioEngine implements DhwaniAudioEngine {
   JustAudioEngine({required AndroidEqualizer equalizer})
     : _player = AudioPlayer(
         userAgent: 'Dhwani/1 (com.prashant.dhwani)',
+        // Android ExoPlayer supports request headers directly. Avoid the
+        // localhost proxy, which adds a device-dependent cleartext hop and can
+        // surface transport failures outside the player's fallback pipeline.
+        useProxyForRequestHeaders: false,
         audioPipeline: AudioPipeline(androidAudioEffects: [equalizer]),
       );
 

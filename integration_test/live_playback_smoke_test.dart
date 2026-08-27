@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:dhwani/app/app.dart';
 import 'package:dhwani/app/providers.dart';
 import 'package:dhwani/core/audio/dhwani_audio_handler.dart';
@@ -19,16 +17,22 @@ void main() {
       tester.element(find.byType(DhwaniApp)),
     );
     final audio = container.read(audioHandlerProvider);
-
-    await audio.setQueueStations(const [_swissJazz], selected: _swissJazz);
-    await audio.selectStation(_swissJazz);
-    unawaited(audio.play());
-    final playing = await audio.snapshot
+    // Exercise the real audio-service/ExoPlayer path on a fresh install.
+    // Playback must not depend on notification runtime permission.
+    final playingFuture = audio.snapshot
         .firstWhere((value) => value.status == DhwaniPlaybackStatus.playing)
         .timeout(const Duration(seconds: 30));
-    expect(playing.station?.id, _swissJazz.id);
+    await audio
+        .tuneStation(
+          _liveStation,
+          queueStations: const [_liveStation],
+          autoplay: true,
+        )
+        .timeout(const Duration(seconds: 30));
+    final playing = await playingFuture;
+    expect(playing.station?.id, _liveStation.id);
     expect(
-      _swissJazz.streams.map((stream) => stream.url),
+      _liveStation.streams.map((stream) => stream.url),
       contains(playing.stream?.url),
     );
 
@@ -41,8 +45,8 @@ void main() {
   });
 }
 
-const _swissJazz = RadioStation(
-  id: 'live-smoke-swiss-jazz',
+const _liveStation = RadioStation(
+  id: 'live-smoke-radio-swiss-jazz',
   name: 'Radio Swiss Jazz',
   country: 'Switzerland',
   countryCode: 'CH',
@@ -54,13 +58,13 @@ const _swissJazz = RadioStation(
       bitrate: 128,
     ),
     StationStream(
-      url: 'https://stream.srg-ssr.ch/rsj/aacp_96.m3u',
-      codec: 'AAC',
-      bitrate: 96,
+      url: 'https://icecast.radiofrance.fr/fip-midfi.mp3',
+      codec: 'MP3',
+      bitrate: 128,
     ),
   ],
-  languages: ['German'],
-  tags: ['jazz'],
+  languages: ['German', 'French', 'Italian'],
+  tags: ['music', 'public radio'],
   directory: RadioDirectory.custom,
   verified: true,
 );

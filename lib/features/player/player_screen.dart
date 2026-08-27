@@ -412,11 +412,7 @@ class _PlayerContent extends ConsumerWidget {
           ],
         ),
         SizedBox(height: compact ? 10 : 16),
-        _PlayLiveButton(
-          station: station,
-          snapshot: snapshot,
-          compact: compact,
-        ),
+        _PlayLiveButton(station: station, snapshot: snapshot, compact: compact),
       ],
     );
   }
@@ -1009,9 +1005,7 @@ class _RecordButton extends ConsumerWidget {
                       dimension: 20,
                       child: CircularProgressIndicator(
                         strokeWidth: 2.2,
-                        color: isRecording
-                            ? Colors.white
-                            : DhwaniColors.signal,
+                        color: isRecording ? Colors.white : DhwaniColors.signal,
                       ),
                     )
                   : isRecording

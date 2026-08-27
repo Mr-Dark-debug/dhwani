@@ -1,56 +1,32 @@
-# Dhwani v1.2.0 - Reliable Radio
+# Dhwani v1.4.1 - Reliable Sideload Playback
 
-This release rebuilds Dhwani's critical paths around finite, truthful operations. A station may work, fail, redirect, stall, disappear, or be geo-blocked; the app now either confirms real playback/recording or reaches a useful terminal state without leaving an endless spinner or false LIVE/REC label.
+Dhwani 1.4.1 is a focused reliability release for phones that installed the APK outside the development device. It removes fresh-install permission and connectivity gates, sends stream requests directly through Android's native player, and repairs Akashvani Darbhanga discovery.
 
-## What's fixed
+## Fixed for every install
 
-- Rapid station changes cannot let an old request replace the newest selection.
-- Recents/history begins only after confirmed playback and one listening session updates one row.
-- Saved, Search, Discover, tuner, custom stations, notifications and Car Mode use the same authoritative switching path.
-- Network, decoder and source errors are classified into short user-facing recovery states with sanitized diagnostics.
+- Radio starts without waiting for Android notification permission. Media-session playback does not require that permission; reminder notifications still ask contextually when scheduled.
+- A transient `no connectivity` report can no longer prevent the player from trying a valid stream.
+- Healthy audio is not interrupted by a brief connectivity handover event.
+- Android ExoPlayer now sends request headers directly instead of using just_audio's localhost HTTP proxy.
+- Existing 10-second per-source and 24-second whole-station bounds remain, so broken stations finish with a useful state instead of spinning forever.
 
-## Playback
+## Akashvani Darbhanga
 
-- Endless live broadcasts are started without awaiting playback completion.
-- Explicit switching, connecting, buffering, playing, paused, reconnecting, offline, unavailable, geo-blocked and unsupported states.
-- Ten-second per-source and 24-second whole-station startup budgets with ranked fallback streams.
-- Bounded 1/2/4-second runtime reconnects; selecting another station cancels pending recovery.
-- Real Radio Swiss Jazz playback, pause, background continuation and media controls verified on Android 16/API 36.
+- Correctly decodes the public station feed when GitHub serves JSON as `text/plain` on Android.
+- Restores the current official WAVES HLS URL published by Akashvani and tries it before older BitGravity fallbacks.
+- Sends Akashvani Origin and Referer request context to the WAVES endpoint.
+- Keeps the current release URL when Akashvani's live HTML page cannot be refreshed from a particular device/network.
+- Preserves truthful `1296 kHz` MW/AM metadata independently of internet-stream availability.
 
-## Recording
+## Verification
 
-- REC appears only after FFmpeg is alive and real output bytes exist.
-- Owned-process cancellation, startup timeout, unexpected-exit finalization, corrupt-file deletion and FFprobe-derived duration/format.
-- Real HTTPS MP3 stream-copy and M4A conversion recordings verified for more than six seconds each.
+- Clean-install real Radio Swiss Jazz playback on the connected physical Pixel 10 reached PLAYING and paused successfully without notification permission.
+- The physical-device Darbhanga probe attempted `radio.wavespb.com` first and the BitGravity fallback second, then terminated as unavailable on the current German network rather than hanging or crashing.
+- Unit/widget suite, Flutter analyzer, release APK/AAB builds, manifest permissions, signer, checksums, and installed release behavior are release gates.
 
-## Discovery
+## Compatibility and limitations
 
-- Country station results paginate beyond 500 and cache progressively.
-- Mirror selection tracks recent health/latency, backs off failing hosts and remains bounded/cancellable.
-- Stale directory rows expire without deleting favourites or custom stations.
-
-## Updates
-
-- Installed version/build/package metadata replaces hardcoded app identity.
-- Stable-only automatic checks use a 12-hour cooldown; manual checks distinguish current, network/API failure and incompatible releases.
-- Exact versioned APK selection, byte progress, cancellation, `.part` cleanup, SHA-256 verification, native APK package/version/signature inspection and atomic rename.
-- Android UI says Installer opened rather than claiming installation succeeded.
-
-## Stability
-
-- 59 unit/widget tests pass.
-- Android integration passes for onboarding, custom persistence, platform services, real live playback, real MP3/M4A recording, and controlled redirect/delay/404/stale-operation behavior.
-- A v1.1.0 build 3 to v1.2.0 build 4 in-place upgrade was accepted and preserved install/app state on the emulator.
-
-## Tested on
-
-- Flutter 3.41.9 / Dart 3.11.5 / Java 21.0.11.
-- Android 16/API 36 Pixel 10 approximation, 1280x2856 at 480 dpi.
-- Physical Pixel 10 hardware was not connected; no physical-device claim is made.
-
-## Known limitations
-
-- Akashvani Darbhanga's current official stream was unavailable from the German test network; Dhwani preserves accurate 1296 kHz metadata and reports the upstream failure honestly.
-- The compatibility release retains v1.1.0's protected legacy Android debug signer. It supports the tested in-place upgrade but is not a permanent Play signing identity.
-- Scheduled recording/radio alarm are honest user-visible reminders under modern Android background policy, not guaranteed silent unattended capture.
-- Full FFmpeg protocol/codec support makes universal APKs large; the AAB permits ABI-specific delivery.
+- Version `1.4.1+7`; Android min SDK 24; compile/target SDK 36.
+- Uses the existing protected signing lineage so installed Dhwani builds can upgrade in place.
+- Darbhanga's broadcaster endpoints are externally operated and may remain geo/network dependent. Dhwani can select, refresh, and fail over sources, but cannot make an upstream broadcast available where its operator resets or removes it.
+- The universal APK is large because it includes full FFmpeg protocol/codec support; the AAB supports ABI-specific store delivery.

@@ -288,56 +288,57 @@ void main() {
     },
   );
 
-  testWidgets('retro tuner renders frequency, marquee, controls, and volume knob', (
-    tester,
-  ) async {
-    SharedPreferences.setMockInitialValues({});
-    final preferences = await SharedPreferences.getInstance();
-    final database = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(database.close);
-    final repository = _FakeCatalogue(database);
-    final station = const RadioStation(
-      id: 'air:darbhanga',
-      name: 'Akashvani Darbhanga',
-      country: 'India',
-      countryCode: 'IN',
-      state: 'Bihar',
-      city: 'Darbhanga',
-      band: RadioBand.fm,
-      frequency: 100.1,
-      frequencyUnit: 'MHz',
-      streams: [StationStream(url: 'https://example.test/live')],
-      directory: RadioDirectory.offlineSeed,
-    );
+  testWidgets(
+    'retro tuner renders frequency, marquee, controls, and volume knob',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final preferences = await SharedPreferences.getInstance();
+      final database = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(database.close);
+      final repository = _FakeCatalogue(database);
+      final station = const RadioStation(
+        id: 'air:darbhanga',
+        name: 'Akashvani Darbhanga',
+        country: 'India',
+        countryCode: 'IN',
+        state: 'Bihar',
+        city: 'Darbhanga',
+        band: RadioBand.fm,
+        frequency: 100.1,
+        frequencyUnit: 'MHz',
+        streams: [StationStream(url: 'https://example.test/live')],
+        directory: RadioDirectory.offlineSeed,
+      );
 
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          preferencesProvider.overrideWithValue(preferences),
-          sharedPreferencesForSettingsProvider.overrideWithValue(preferences),
-          databaseProvider.overrideWithValue(database),
-          catalogueRepositoryProvider.overrideWithValue(repository),
-          audioHandlerProvider.overrideWithValue(_FakeAudioHandler()),
-          selectedStationProvider.overrideWith(
-            () => _TestSelectedStationController(station),
-          ),
-          stationsProvider.overrideWith((ref) => Stream.value([station])),
-          favouritesProvider.overrideWith((ref) => Stream.value([station])),
-        ],
-        child: const MaterialApp(home: RetroTunerScreen()),
-      ),
-    );
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            preferencesProvider.overrideWithValue(preferences),
+            sharedPreferencesForSettingsProvider.overrideWithValue(preferences),
+            databaseProvider.overrideWithValue(database),
+            catalogueRepositoryProvider.overrideWithValue(repository),
+            audioHandlerProvider.overrideWithValue(_FakeAudioHandler()),
+            selectedStationProvider.overrideWith(
+              () => _TestSelectedStationController(station),
+            ),
+            stationsProvider.overrideWith((ref) => Stream.value([station])),
+            favouritesProvider.overrideWith((ref) => Stream.value([station])),
+          ],
+          child: const MaterialApp(home: RetroTunerScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.text('100.1'), findsOneWidget);
-    expect(find.text('NOW PLAYING'), findsOneWidget);
-    expect(find.text('Akashvani Darbhanga'), findsWidgets);
-    expect(find.text('FM · AM · NET'), findsOneWidget);
-    expect(find.text('RADIO AREA'), findsOneWidget);
-    expect(find.text('STEREO'), findsOneWidget);
-    expect(find.text('Favourite stations · 1'), findsOneWidget);
-    expect(find.byType(RetroTunerScreen), findsOneWidget);
-  });
+      expect(find.text('100.1'), findsOneWidget);
+      expect(find.text('NOW PLAYING'), findsOneWidget);
+      expect(find.text('Akashvani Darbhanga'), findsWidgets);
+      expect(find.text('FM · AM · NET'), findsOneWidget);
+      expect(find.text('RADIO AREA'), findsOneWidget);
+      expect(find.text('STEREO'), findsOneWidget);
+      expect(find.text('Favourite stations · 1'), findsOneWidget);
+      expect(find.byType(RetroTunerScreen), findsOneWidget);
+    },
+  );
 }
 
 class _FakeAudioHandler extends Fake implements DhwaniAudioHandler {

@@ -395,10 +395,7 @@ class _FrequencyDisplay extends StatelessWidget {
                   station.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white54,
-                    fontSize: 12,
-                  ),
+                  style: const TextStyle(color: Colors.white54, fontSize: 12),
                 ),
                 const SizedBox(height: 8),
                 // Status indicator
@@ -465,10 +462,8 @@ class _RetroTunerDial extends StatefulWidget {
 class _RetroTunerDialState extends State<_RetroTunerDial> {
   double _drag = 0;
 
-  int get _currentIndex => math.max(
-        0,
-        widget.stations.indexWhere((s) => s.id == widget.current.id),
-      );
+  int get _currentIndex =>
+      math.max(0, widget.stations.indexWhere((s) => s.id == widget.current.id));
 
   void _step(int amount) {
     if (widget.stations.isEmpty) return;
@@ -494,8 +489,7 @@ class _RetroTunerDialState extends State<_RetroTunerDial> {
                     setState(() => _drag += d.delta.dx),
                 onHorizontalDragEnd: (d) {
                   final delta =
-                      (-_drag / 54 -
-                              d.velocity.pixelsPerSecond.dx / 1200)
+                      (-_drag / 54 - d.velocity.pixelsPerSecond.dx / 1200)
                           .round();
                   setState(() => _drag = 0);
                   if (delta != 0) _step(delta);
@@ -561,10 +555,7 @@ class _RetroArrowButton extends StatelessWidget {
 }
 
 class _FrequencyLabelsRow extends StatelessWidget {
-  const _FrequencyLabelsRow({
-    required this.index,
-    required this.stations,
-  });
+  const _FrequencyLabelsRow({required this.index, required this.stations});
   final int index;
   final List<RadioStation> stations;
 
@@ -620,10 +611,7 @@ class _RetroDialPainter extends CustomPainter {
       Rect.fromLTWH(0, 4, size.width, size.height - 8),
       const Radius.circular(8),
     );
-    canvas.drawRRect(
-      bezelRect,
-      Paint()..color = const Color(0xFF2A2A2A),
-    );
+    canvas.drawRRect(bezelRect, Paint()..color = const Color(0xFF2A2A2A));
 
     // Tick marks
     final tickPaint = Paint()
@@ -644,8 +632,8 @@ class _RetroDialPainter extends CustomPainter {
       final height = big
           ? 34.0
           : medium
-              ? 22.0
-              : 12.0;
+          ? 22.0
+          : 12.0;
       canvas.drawLine(
         Offset(x, cy - height / 2),
         Offset(x, cy + height / 2),
@@ -659,10 +647,7 @@ class _RetroDialPainter extends CustomPainter {
           ..lineTo(x, cy - height / 2)
           ..lineTo(x - 2.5, cy - height / 2 - 2.5)
           ..close();
-        canvas.drawPath(
-          diamondPath,
-          Paint()..color = const Color(0xFF777777),
-        );
+        canvas.drawPath(diamondPath, Paint()..color = const Color(0xFF777777));
       }
     }
 
@@ -683,10 +668,7 @@ class _RetroDialPainter extends CustomPainter {
       ..lineTo(centre - 4, 11)
       ..lineTo(centre + 4, 11)
       ..close();
-    canvas.drawPath(
-      trianglePath,
-      Paint()..color = const Color(0xFFE33B32),
-    );
+    canvas.drawPath(trianglePath, Paint()..color = const Color(0xFFE33B32));
   }
 
   @override
@@ -872,10 +854,7 @@ class _ControlPanel extends ConsumerWidget {
               ),
               const SizedBox(width: 8),
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 6,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(10),
@@ -996,10 +975,7 @@ class _FavouriteStationsRow extends ConsumerWidget {
               ? const Center(
                   child: Text(
                     'No favourites yet',
-                    style: TextStyle(
-                      color: Color(0xFF999999),
-                      fontSize: 12,
-                    ),
+                    style: TextStyle(color: Color(0xFF999999), fontSize: 12),
                   ),
                 )
               : ListView.separated(
@@ -1153,11 +1129,7 @@ class _TransportControls extends ConsumerWidget {
                   if (target != index && queue.isNotEmpty) {
                     ref
                         .read(stationPlaybackControllerProvider)
-                        .tune(
-                          queue[target],
-                          queue: queue,
-                          autoplay: playing,
-                        );
+                        .tune(queue[target], queue: queue, autoplay: playing);
                   }
                 },
               ),
@@ -1173,9 +1145,7 @@ class _TransportControls extends ConsumerWidget {
                   child: Padding(
                     padding: const EdgeInsets.all(10),
                     child: Icon(
-                      playing
-                          ? Icons.pause_rounded
-                          : Icons.play_arrow_rounded,
+                      playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
                       color: Colors.white,
                       size: 24,
                     ),
@@ -1190,16 +1160,11 @@ class _TransportControls extends ConsumerWidget {
                     0,
                     queue.indexWhere((s) => s.id == station.id),
                   );
-                  final target =
-                      math.min(queue.length - 1, index + 5);
+                  final target = math.min(queue.length - 1, index + 5);
                   if (target != index && queue.isNotEmpty) {
                     ref
                         .read(stationPlaybackControllerProvider)
-                        .tune(
-                          queue[target],
-                          queue: queue,
-                          autoplay: playing,
-                        );
+                        .tune(queue[target], queue: queue, autoplay: playing);
                   }
                 },
               ),
@@ -1455,34 +1420,35 @@ void _showEqualizer(BuildContext context, WidgetRef ref) {
                   const SizedBox(height: 12),
                   Wrap(
                     spacing: 8,
-                    children: const {
-                      'flat': 'Flat',
-                      'voice': 'Voice',
-                      'bass': 'Bass',
-                      'treble': 'Treble',
-                      'custom': 'Custom',
-                    }.entries.map((entry) {
-                      final selected = selectedPreset == entry.key;
-                      return ChoiceChip(
-                        label: Text(entry.value),
-                        selected: selected,
-                        onSelected: (_) async {
-                          if (entry.key == 'custom') return;
-                          final settings = ref.read(settingsProvider);
-                          await ref.read(settingsProvider.notifier).update(
-                                settings.copyWith(
-                                  equalizerPreset: entry.key,
-                                ),
-                              );
-                          ref
-                              .read(audioHandlerProvider)
-                              .configureEqualizer(entry.key);
-                          setSheetState(
-                            () => selectedPreset = entry.key,
+                    children:
+                        const {
+                          'flat': 'Flat',
+                          'voice': 'Voice',
+                          'bass': 'Bass',
+                          'treble': 'Treble',
+                          'custom': 'Custom',
+                        }.entries.map((entry) {
+                          final selected = selectedPreset == entry.key;
+                          return ChoiceChip(
+                            label: Text(entry.value),
+                            selected: selected,
+                            onSelected: (_) async {
+                              if (entry.key == 'custom') return;
+                              final settings = ref.read(settingsProvider);
+                              await ref
+                                  .read(settingsProvider.notifier)
+                                  .update(
+                                    settings.copyWith(
+                                      equalizerPreset: entry.key,
+                                    ),
+                                  );
+                              ref
+                                  .read(audioHandlerProvider)
+                                  .configureEqualizer(entry.key);
+                              setSheetState(() => selectedPreset = entry.key);
+                            },
                           );
-                        },
-                      );
-                    }).toList(),
+                        }).toList(),
                   ),
                   const SizedBox(height: 12),
                   SizedBox(
@@ -1532,9 +1498,7 @@ void _showEqualizer(BuildContext context, WidgetRef ref) {
                             ),
                             SizedBox(
                               width: 44,
-                              child: Text(
-                                '${band.gain.toStringAsFixed(1)} dB',
-                              ),
+                              child: Text('${band.gain.toStringAsFixed(1)} dB'),
                             ),
                           ],
                         );
@@ -1552,19 +1516,19 @@ void _showEqualizer(BuildContext context, WidgetRef ref) {
 }
 
 String _statusLabel(DhwaniPlaybackStatus status) => switch (status) {
-      DhwaniPlaybackStatus.idle => 'Ready',
-      DhwaniPlaybackStatus.selected => 'Ready',
-      DhwaniPlaybackStatus.switching => 'Switching…',
-      DhwaniPlaybackStatus.connecting => 'Connecting…',
-      DhwaniPlaybackStatus.loading => 'Connecting…',
-      DhwaniPlaybackStatus.ready => 'Ready',
-      DhwaniPlaybackStatus.buffering => 'Buffering…',
-      DhwaniPlaybackStatus.playing => 'Live',
-      DhwaniPlaybackStatus.paused => 'Paused',
-      DhwaniPlaybackStatus.reconnecting => 'Reconnecting…',
-      DhwaniPlaybackStatus.offline => 'Offline',
-      DhwaniPlaybackStatus.geoBlocked => 'Unavailable here',
-      DhwaniPlaybackStatus.unsupported => 'Unsupported stream',
-      DhwaniPlaybackStatus.unavailable => 'Unavailable',
-      DhwaniPlaybackStatus.error => 'Unavailable',
-    };
+  DhwaniPlaybackStatus.idle => 'Ready',
+  DhwaniPlaybackStatus.selected => 'Ready',
+  DhwaniPlaybackStatus.switching => 'Switching…',
+  DhwaniPlaybackStatus.connecting => 'Connecting…',
+  DhwaniPlaybackStatus.loading => 'Connecting…',
+  DhwaniPlaybackStatus.ready => 'Ready',
+  DhwaniPlaybackStatus.buffering => 'Buffering…',
+  DhwaniPlaybackStatus.playing => 'Live',
+  DhwaniPlaybackStatus.paused => 'Paused',
+  DhwaniPlaybackStatus.reconnecting => 'Reconnecting…',
+  DhwaniPlaybackStatus.offline => 'Offline',
+  DhwaniPlaybackStatus.geoBlocked => 'Unavailable here',
+  DhwaniPlaybackStatus.unsupported => 'Unsupported stream',
+  DhwaniPlaybackStatus.unavailable => 'Unavailable',
+  DhwaniPlaybackStatus.error => 'Unavailable',
+};

@@ -2,6 +2,28 @@
 
 All notable Dhwani changes are recorded here. Versions follow semantic versioning; Android build numbers remain strictly increasing.
 
+## [1.4.1] - 2026-08-27
+
+### Fixed
+
+- Fresh sideloads start playback immediately instead of waiting for an unnecessary notification permission result.
+- Transient Android connectivity `none` reports no longer veto a real stream request or interrupt healthy audio.
+- Stream headers are sent directly by Android ExoPlayer instead of routing every station through a localhost proxy.
+- Akashvani's `text/plain` JSON feed is decoded correctly on Android.
+- The current official Akashvani Darbhanga WAVES HLS URL is retained, sent with official-page request context, and ranked ahead of BitGravity fallbacks.
+- A temporary failure to fetch Akashvani's live HTML page no longer removes the known-current Darbhanga source.
+
+### Verification
+
+- Physical Pixel 10 clean-install Radio Swiss Jazz playback reached PLAYING and paused with notification permission unset.
+- Physical Pixel 10 Darbhanga probe attempted WAVES first and BitGravity second, then reported bounded unavailable on the German route where both upstreams remain unreachable.
+- Distributed HTTP probes, including Kolkata, reached the current WAVES endpoint; actual audio availability remains controlled by Akashvani and the listener's network.
+
+### Compatibility
+
+- Version `1.4.1+7`, Android min SDK 24, compile/target SDK 36.
+- Retains the existing protected Android signing lineage for in-place upgrades.
+
 ## [1.2.0] - 2026-08-24
 
 ### Added

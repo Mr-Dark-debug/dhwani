@@ -964,3 +964,35 @@ Future tag builds avoid a known runtime deprecation and keep the externally muta
 
 ### Revisit if
 GitHub changes hosted-runner compatibility or offers a first-party dedicated release-upload action.
+
+## DEC-0033 — Playback requests outrank permission and connectivity hints
+
+Date: 2026-08-27
+Status: Accepted
+
+### Question
+How should Dhwani behave when a fresh sideload has no notification grant or Android briefly reports no connectivity?
+
+### Options considered
+- Require every declared permission before attempting audio
+- Trust connectivity plug-in state and reject playback when it reports `none`
+- Start user-requested media immediately, keep reminder permission contextual, and let the real player request classify reachability
+
+### Research / evidence
+- `INTERNET` and `ACCESS_NETWORK_STATE` are install-time normal permissions.
+- Android media-session notifications are exempt from the Android 13 notification runtime permission.
+- A clean physical Pixel 10 probe reported connectivity `none` while Android simultaneously showed validated Wi-Fi, proving the status can be transient.
+- `just_audio` supports direct Android ExoPlayer headers, avoiding the default localhost proxy used when request headers are present.
+
+### Decision
+Never await notification permission before play, tune, or retry. Treat connectivity as advisory except for the explicit user-selected Wi-Fi-only policy. Send headers natively through ExoPlayer, and let bounded stream attempts determine playing, offline, unavailable, geo-blocked, or unsupported state.
+
+### Why
+This removes three device-dependent gates from the user's Play action without adding permissions or weakening failure bounds.
+
+### Trade-offs
+- A truly offline attempt can take the source budget to fail instead of being rejected instantly.
+- Reminder notifications still need a contextual runtime prompt on Android 13+.
+
+### Revisit if
+Android introduces a reliable validated-network callback that is guaranteed not to race app startup, or media notification exemption rules change.

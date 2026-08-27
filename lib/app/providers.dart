@@ -36,19 +36,14 @@ final appUpdateServiceProvider = Provider<AppUpdateService>(
   (ref) => AppUpdateService(),
 );
 
-/// Requests Android's notification permission immediately before the first
-/// user-initiated playback. Playback still proceeds when the user declines,
-/// but Android will then keep the foreground service out of the notification
-/// drawer and media controls will be less discoverable.
-/// Requests Android's notification permission immediately before the first
-/// user-initiated playback. Playback still proceeds when the user declines,
-/// but Android will then keep the foreground service out of the notification
-/// drawer and media controls will be less discoverable.
+/// Starts user-requested playback without gating audio on a notification
+/// permission dialog. Android media-session notifications are exempt from the
+/// Android 13 notification runtime permission, while reminders request that
+/// permission contextually when the user schedules one.
 Future<void> playWithMediaNotification(
   WidgetRef ref, [
   RadioStation? explicitStation,
 ]) async {
-  await ref.read(notificationServiceProvider).requestPermission();
   final selected = explicitStation ?? ref.read(selectedStationProvider);
   final handler = ref.read(audioHandlerProvider);
   if (selected != null &&
@@ -60,11 +55,9 @@ Future<void> playWithMediaNotification(
       current: selected,
       preferredScope: ref.read(settingsProvider).defaultScope,
     );
-    await ref.read(stationPlaybackControllerProvider).tune(
-      selected,
-      queue: queue,
-      autoplay: true,
-    );
+    await ref
+        .read(stationPlaybackControllerProvider)
+        .tune(selected, queue: queue, autoplay: true);
   } else {
     await handler.play();
   }
@@ -158,9 +151,6 @@ class StationPlaybackController {
     bool persistSelection = true,
   }) async {
     await _finishRecordingBeforeSwitch(station);
-    if (autoplay) {
-      await ref.read(notificationServiceProvider).requestPermission();
-    }
     await ref
         .read(audioHandlerProvider)
         .tuneStation(station, queueStations: queue, autoplay: autoplay);
@@ -198,7 +188,6 @@ class StationPlaybackController {
   }
 
   Future<void> retry() async {
-    await ref.read(notificationServiceProvider).requestPermission();
     await ref.read(audioHandlerProvider).retry();
   }
 

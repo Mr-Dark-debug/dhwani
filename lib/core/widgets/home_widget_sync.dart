@@ -6,7 +6,9 @@ import '../../data/models/radio_station.dart';
 import '../audio/dhwani_audio_handler.dart';
 
 class HomeWidgetSync {
-  static const MethodChannel _channel = MethodChannel('com.prashant.dhwani/widget');
+  static const MethodChannel _channel = MethodChannel(
+    'com.prashant.dhwani/widget',
+  );
 
   static Future<void> update({
     RadioStation? station,
@@ -23,10 +25,13 @@ class HomeWidgetSync {
       if (station != null) {
         data['station_name'] = station.name;
         data['station_frequency'] = station.frequencyDisplay;
-        data['station_freq_unit'] =
-            station.frequency != null ? ' ${station.frequencyUnit ?? 'MHz'}' : '';
+        data['station_freq_unit'] = station.frequency != null
+            ? ' ${station.frequencyUnit ?? 'MHz'}'
+            : '';
         data['station_band'] = station.bandLabel;
-        data['station_country'] = station.country.isNotEmpty ? station.country : 'Global';
+        data['station_country'] = station.country.isNotEmpty
+            ? station.country
+            : 'Global';
 
         final freq = station.frequency;
         if (freq != null) {

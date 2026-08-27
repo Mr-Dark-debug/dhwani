@@ -307,31 +307,24 @@ class DhwaniAudioHandler extends BaseAudioHandler
       );
       if (!available) {
         _networkWasUnavailable = true;
-        if (_wantsPlayback && _currentStation != null) {
-          final operation = ++_operationId;
-          _cancelTimers();
-          unawaited(_stopEngineExpected());
-          unawaited(_finishSession());
-          final failure = classifyPlaybackFailure(
-            const SocketException('Connection offline'),
-          );
-          _lastFailure = failure;
-          _emit(
-            DhwaniPlaybackStatus.offline,
-            station: _currentStation,
-            stream: _activeStream,
-            failure: failure,
-            operation: operation,
-          );
-        }
+        // Do not interrupt healthy audio from an advisory connectivity event.
+        // Some Android devices briefly emit `none` during app startup or a
+        // network handover. The player transport remains the source of truth.
         return;
       }
       if (_networkWasUnavailable &&
           _autoReconnect &&
           _wantsPlayback &&
-          _currentStation?.canPlay == true) {
+          _currentStation?.canPlay == true &&
+          {
+            DhwaniPlaybackStatus.offline,
+            DhwaniPlaybackStatus.unavailable,
+            DhwaniPlaybackStatus.error,
+          }.contains(snapshot.value.status)) {
         _networkWasUnavailable = false;
         _scheduleReconnect();
+      } else if (_networkWasUnavailable) {
+        _networkWasUnavailable = false;
       }
     });
   }
@@ -455,19 +448,6 @@ class DhwaniAudioHandler extends BaseAudioHandler
           value == ConnectivityResult.wifi ||
           value == ConnectivityResult.ethernet,
     );
-    if (connectivity.isNotEmpty && !hasKnownNetwork) {
-      final failure = classifyPlaybackFailure(
-        const SocketException('Connection offline'),
-      );
-      _lastFailure = failure;
-      _emit(
-        DhwaniPlaybackStatus.offline,
-        station: station,
-        failure: failure,
-        operation: operation,
-      );
-      return;
-    }
     if (_wifiOnly && !unmetered) {
       const failure = PlaybackFailure(
         reason: PlaybackFailureReason.offline,
@@ -484,6 +464,15 @@ class DhwaniAudioHandler extends BaseAudioHandler
         operation: operation,
       );
       return;
+    }
+
+    if (connectivity.isNotEmpty && !hasKnownNetwork) {
+      // Connectivity APIs are advisory and can briefly report `none` during
+      // startup even when Android has a validated network. The real stream
+      // request is authoritative and classifies an actual SocketException.
+      DhwaniLog.player(
+        'Connectivity reported offline; attempting the stream directly',
+      );
     }
 
     final streams = _playableStreams(station);
@@ -542,7 +531,7 @@ class DhwaniAudioHandler extends BaseAudioHandler
               stream.url,
               headers: Uri.parse(stream.url).scheme == 'file'
                   ? null
-                  : _streamHeaders,
+                  : _streamHeadersFor(stream),
             )
             .timeout(candidateTimeout);
         _loadingCandidate = false;
@@ -1096,6 +1085,18 @@ class DhwaniAudioHandler extends BaseAudioHandler
     'Accept-Encoding': 'identity',
     'Icy-MetaData': '1',
   };
+
+  static Map<String, String> _streamHeadersFor(StationStream stream) {
+    final host = Uri.tryParse(stream.url)?.host.toLowerCase() ?? '';
+    if (host == 'wavespb.com' || host.endsWith('.wavespb.com')) {
+      return const {
+        ..._streamHeaders,
+        'Origin': 'https://akashvani.gov.in',
+        'Referer': 'https://akashvani.gov.in/radio/live.php',
+      };
+    }
+    return _streamHeaders;
+  }
 
   static Duration _minimumDuration(Duration a, Duration b) {
     if (b <= Duration.zero) return const Duration(milliseconds: 1);

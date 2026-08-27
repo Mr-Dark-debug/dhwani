@@ -1,7 +1,7 @@
 name: dhwani
 description: "Real radio from your city and the world."
 publish_to: none
-version: 1.4.0+6
+version: 1.4.1+7
 
 environment:
   sdk: ^3.11.5

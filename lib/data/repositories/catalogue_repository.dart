@@ -133,28 +133,20 @@ class CatalogueRepository {
       final semanticKey = station.isDarbhanga
           ? 'akashvani-darbhanga'
           : station.id;
-      final filteredStationStreams = station.streams
-          .where((s) => !s.url.contains('wavespb.com'))
-          .toList();
       final previous = result[semanticKey];
       if (previous == null) {
-        result[semanticKey] = station.copyWith(
-          streams: filteredStationStreams.isNotEmpty
-              ? filteredStationStreams
-              : station.streams,
-        );
+        result[semanticKey] = station;
       } else {
-        final previousFiltered = previous.streams
-            .where((s) => !s.url.contains('wavespb.com'))
-            .toList();
         final urls = <String, StationStream>{
-          for (final stream in [...filteredStationStreams, ...previousFiltered])
+          // Later sources are fresher (live APIs follow seeds and cache), so
+          // try their URLs first while retaining older endpoints as fallbacks.
+          for (final stream in [...station.streams, ...previous.streams])
             stream.url: stream,
         };
         result[semanticKey] = previous.copyWith(
           streams: urls.values.isNotEmpty
               ? urls.values.toList()
-              : previous.streams,
+              : station.streams,
         );
       }
     }
