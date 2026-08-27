@@ -2,6 +2,25 @@
 
 All notable Dhwani changes are recorded here. Versions follow semantic versioning; Android build numbers remain strictly increasing.
 
+## [1.4.2] - 2026-08-27
+
+### Fixed
+
+- Akashvani Darbhanga now tries the broadcaster's CloudFront delivery host before the public WAVES hostname that some networks reset or filter.
+- The Darbhanga delivery fallback is retained through offline seeding and cached-catalogue merges, so an older installed catalogue cannot put stale BitGravity URLs first.
+- The fallback is restricted to Akashvani Darbhanga; other stations keep their existing stream URLs and order.
+
+### Verification
+
+- Flutter analyzer passed with no issues and all 66 unit/widget tests passed.
+- Android Pixel 10-equivalent emulator confirmed Darbhanga tries CloudFront, WAVES, then legacy BitGravity and terminates cleanly while the broadcaster is off-air.
+- Real Radio Swiss Jazz playback reached PLAYING and paused on the same emulator after the Darbhanga-only change.
+
+### Compatibility
+
+- Version `1.4.2+8`, Android min SDK 24, compile/target SDK 36.
+- Retains the existing protected Android signing lineage for in-place upgrades.
+
 ## [1.4.1] - 2026-08-27
 
 ### Fixed

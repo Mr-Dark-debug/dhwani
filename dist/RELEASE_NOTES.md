@@ -1,32 +1,28 @@
-# Dhwani v1.4.1 - Reliable Sideload Playback
+# Dhwani v1.4.2 - Akashvani Darbhanga Delivery Fix
 
-Dhwani 1.4.1 is a focused reliability release for phones that installed the APK outside the development device. It removes fresh-install permission and connectivity gates, sends stream requests directly through Android's native player, and repairs Akashvani Darbhanga discovery.
-
-## Fixed for every install
-
-- Radio starts without waiting for Android notification permission. Media-session playback does not require that permission; reminder notifications still ask contextually when scheduled.
-- A transient `no connectivity` report can no longer prevent the player from trying a valid stream.
-- Healthy audio is not interrupted by a brief connectivity handover event.
-- Android ExoPlayer now sends request headers directly instead of using just_audio's localhost HTTP proxy.
-- Existing 10-second per-source and 24-second whole-station bounds remain, so broken stations finish with a useful state instead of spinning forever.
+Dhwani 1.4.2 is a deliberately narrow follow-up for Akashvani Darbhanga. It preserves every other station's connection behavior.
 
 ## Akashvani Darbhanga
 
-- Correctly decodes the public station feed when GitHub serves JSON as `text/plain` on Android.
-- Restores the current official WAVES HLS URL published by Akashvani and tries it before older BitGravity fallbacks.
-- Sends Akashvani Origin and Referer request context to the WAVES endpoint.
-- Keeps the current release URL when Akashvani's live HTML page cannot be refreshed from a particular device/network.
-- Preserves truthful `1296 kHz` MW/AM metadata independently of internet-stream availability.
+- Tries the broadcaster's CloudFront delivery host before its public WAVES hostname, which some ISP/content filters reset.
+- Keeps the current official WAVES stream as the second source and the older BitGravity sources as bounded fallbacks.
+- Inserts the delivery URL into the offline seed and cached-catalogue merge, preventing an older installation's stale station record from taking priority.
+- Preserves the station's truthful `1296 kHz` MW/AM metadata independently of internet-stream availability.
 
-## Verification
+## Other stations are unchanged
 
-- Clean-install real Radio Swiss Jazz playback on the connected physical Pixel 10 reached PLAYING and paused successfully without notification permission.
-- The physical-device Darbhanga probe attempted `radio.wavespb.com` first and the BitGravity fallback second, then terminated as unavailable on the current German network rather than hanging or crashing.
-- Unit/widget suite, Flutter analyzer, release APK/AAB builds, manifest permissions, signer, checksums, and installed release behavior are release gates.
+- The new fallback is conditional on the Akashvani Darbhanga station identity only.
+- A regression test proves another country's station retains the same primary and backup URL order.
+- Radio Swiss Jazz reached PLAYING and paused on an Android Pixel 10-equivalent emulator after this change.
 
-## Compatibility and limitations
+## Verification and limitation
 
-- Version `1.4.1+7`; Android min SDK 24; compile/target SDK 36.
-- Uses the existing protected signing lineage so installed Dhwani builds can upgrade in place.
-- Darbhanga's broadcaster endpoints are externally operated and may remain geo/network dependent. Dhwani can select, refresh, and fail over sources, but cannot make an upstream broadcast available where its operator resets or removes it.
+- Flutter analyzer passed with no issues; all 66 unit/widget tests passed.
+- The Android Darbhanga probe confirmed the order CloudFront -> WAVES -> legacy BitGravity and a bounded unavailable result instead of a hang.
+- At the overnight test time in India, the broadcaster's delivery host returned HTTP 404 and its WAVES hostname was reset on the current network. Dhwani cannot create audio while the broadcaster is off-air; the new direct delivery source is available for its live transmission window.
+
+## Compatibility
+
+- Version `1.4.2+8`; Android min SDK 24; compile/target SDK 36.
+- Uses the existing protected signing lineage for in-place upgrades.
 - The universal APK is large because it includes full FFmpeg protocol/codec support; the AAB supports ABI-specific store delivery.

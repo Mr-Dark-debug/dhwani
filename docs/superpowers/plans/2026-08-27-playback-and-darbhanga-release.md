@@ -4,6 +4,8 @@
 
 **Goal:** Ship Dhwani 1.4.1+7 so a clean sideload starts radio playback without a permission or connectivity false-negative gate and Akashvani Darbhanga uses the current official stream with bounded fallbacks.
 
+**Follow-up:** The v1.4.1 release workflow was canceled before publication after the Darbhanga route remained blocked. The corrected public release is v1.4.2+8 and adds only a Darbhanga-specific direct delivery fallback; it does not reuse or move the v1.4.1 tag.
+
 **Architecture:** Keep Android permissions declarative and contextual: install-time network permissions remain in the manifest, media playback never waits for notification permission, and reminders request notification permission when scheduled. Make the player transport authoritative, send headers through ExoPlayer rather than just_audio's localhost proxy, and merge the official Darbhanga URL ahead of feed and seed fallbacks.
 
 **Tech Stack:** Flutter 3.41.9, Dart 3.11.5, Riverpod, just_audio/ExoPlayer, audio_service, Dio, Drift, Android API 24-36.

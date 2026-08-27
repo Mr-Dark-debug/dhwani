@@ -25,6 +25,10 @@ void main() {
       );
       expect(
         station.streams.first.url,
+        AkashvaniApi.darbhangaDeliveryStreamUrl,
+      );
+      expect(
+        station.streams[1].url,
         'https://radio.wavespb.com/live/current/darbhanga.m3u8',
       );
       expect(
@@ -35,6 +39,26 @@ void main() {
       );
     },
   );
+
+  test('Darbhanga fallback does not reorder another country station', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = CatalogueRepository(
+      database: database,
+      radioBrowser: _SwissRadioBrowser(),
+      akashvani: _EmptyAkashvani(),
+    );
+
+    await repository.bootstrap();
+
+    final swiss = (await database.allStations()).singleWhere(
+      (item) => item.id == 'test:swiss',
+    );
+    expect(swiss.streams.map((stream) => stream.url).toList(), const [
+      'https://example.test/swiss-primary.mp3',
+      'https://example.test/swiss-backup.mp3',
+    ]);
+  });
 }
 
 class _CurrentAkashvani extends AkashvaniApi {
@@ -64,4 +88,27 @@ class _CurrentAkashvani extends AkashvaniApi {
 class _EmptyRadioBrowser extends RadioBrowserApi {
   @override
   Future<List<RadioStation>> popular({int limit = 250}) async => const [];
+}
+
+class _EmptyAkashvani extends AkashvaniApi {
+  @override
+  Future<List<RadioStation>> stations() async => const [];
+}
+
+class _SwissRadioBrowser extends RadioBrowserApi {
+  @override
+  Future<List<RadioStation>> popular({int limit = 250}) async => const [
+    RadioStation(
+      id: 'test:swiss',
+      name: 'Swiss Regression Station',
+      country: 'Switzerland',
+      countryCode: 'CH',
+      band: RadioBand.net,
+      streams: [
+        StationStream(url: 'https://example.test/swiss-primary.mp3'),
+        StationStream(url: 'https://example.test/swiss-backup.mp3'),
+      ],
+      directory: RadioDirectory.radioBrowser,
+    ),
+  ];
 }

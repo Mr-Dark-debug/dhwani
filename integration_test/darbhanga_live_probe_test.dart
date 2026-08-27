@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:ui';
 
 import 'package:dhwani/core/audio/dhwani_audio_handler.dart';
@@ -13,9 +14,9 @@ void main() {
   ) async {
     final previousPlatformErrorHandler = PlatformDispatcher.instance.onError;
     PlatformDispatcher.instance.onError = (error, stack) {
-      // just_audio's local header proxy can surface the same transport error
-      // both through setUrl and the root platform callback. The app handles the
-      // latter in main.dart; mirror that behavior in this standalone probe.
+      // The app records platform callback failures in main.dart; mirror that
+      // behavior in this standalone probe so the final snapshot can report the
+      // classified candidate failure.
       return true;
     };
     addTearDown(
@@ -26,6 +27,34 @@ void main() {
     final station = (await AkashvaniApi().stations()).singleWhere(
       (item) => item.isDarbhanga,
     );
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
+    addTearDown(client.close);
+    for (final stream in station.streams.take(2)) {
+      try {
+        final request = await client
+            .getUrl(Uri.parse(stream.url))
+            .timeout(const Duration(seconds: 10));
+        request.followRedirects = false;
+        request.headers.set('User-Agent', 'Dhwani/1 (com.prashant.dhwani)');
+        final response = await request.close().timeout(
+          const Duration(seconds: 10),
+        );
+        // ignore: avoid_print
+        print(
+          'Darbhanga HTTP probe (${Uri.parse(stream.url).host}): '
+          'status=${response.statusCode}; '
+          'location=${response.headers.value(HttpHeaders.locationHeader)}; '
+          'contentType=${response.headers.contentType}',
+        );
+        await response.drain<void>();
+      } catch (error) {
+        // ignore: avoid_print
+        print(
+          'Darbhanga HTTP probe (${Uri.parse(stream.url).host}) failed: '
+          '$error',
+        );
+      }
+    }
     final attemptedHosts = <String>[];
     final subscription = audio.snapshot.listen((snapshot) {
       final host = Uri.tryParse(snapshot.stream?.url ?? '')?.host;
@@ -35,13 +64,13 @@ void main() {
     });
     addTearDown(subscription.cancel);
 
-    expect(station.streams.first.url, contains('radio.wavespb.com'));
+    expect(station.streams.first.url, AkashvaniApi.darbhangaDeliveryStreamUrl);
     await audio
         .tuneStation(station, queueStations: [station], autoplay: true)
         .timeout(const Duration(seconds: 30));
 
     expect(attemptedHosts, isNotEmpty);
-    expect(attemptedHosts.first, 'radio.wavespb.com');
+    expect(attemptedHosts.first, 'd3hrxqn1tritdh.cloudfront.net');
     expect(audio.snapshot.value.busy, isFalse);
     // Darbhanga is geo/network dependent. A bounded unavailable result is
     // truthful; PLAYING is recorded when the current network can reach India.
@@ -58,7 +87,9 @@ void main() {
     // ignore: avoid_print
     print(
       'Darbhanga probe: ${audio.snapshot.value.status.name}; '
-      'attempted ${attemptedHosts.join(', ')}',
+      'attempted ${attemptedHosts.join(', ')}; '
+      'failure=${audio.snapshot.value.failure?.reason.name}; '
+      'diagnostic=${audio.snapshot.value.failure?.diagnostic}',
     );
     await audio.stop();
   });

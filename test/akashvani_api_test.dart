@@ -16,9 +16,13 @@ void main() {
       final station = stations.single;
       expect(station.name, 'Akashvani Darbhanga');
       expect(station.frequency, 1296);
-      expect(station.streams, hasLength(2));
+      expect(station.streams, hasLength(3));
       expect(
         station.streams.first.url,
+        AkashvaniApi.darbhangaDeliveryStreamUrl,
+      );
+      expect(
+        station.streams[1].url,
         'https://radio.wavespb.com/live/current/darbhanga.m3u8',
       );
       expect(station.streams.first.hls, isTrue);
@@ -31,7 +35,8 @@ void main() {
       ..httpClientAdapter = _AkashvaniAdapter(failLivePage: true);
     final station = (await AkashvaniApi(dio: dio).stations()).single;
 
-    expect(station.streams.first.url, AkashvaniApi.currentDarbhangaStreamUrl);
+    expect(station.streams.first.url, AkashvaniApi.darbhangaDeliveryStreamUrl);
+    expect(station.streams[1].url, AkashvaniApi.currentDarbhangaStreamUrl);
     expect(station.streams.last.url, 'https://legacy.test/darbhanga.m3u8');
   });
 }

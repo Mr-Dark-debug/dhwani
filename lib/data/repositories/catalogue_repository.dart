@@ -129,7 +129,8 @@ class CatalogueRepository {
 
   static List<RadioStation> _merge(Iterable<RadioStation> input) {
     final result = <String, RadioStation>{};
-    for (final station in input) {
+    for (final rawStation in input) {
+      final station = _withDarbhangaDeliveryFallback(rawStation);
       final semanticKey = station.isDarbhanga
           ? 'akashvani-darbhanga'
           : station.id;
@@ -153,6 +154,18 @@ class CatalogueRepository {
     return result.values.toList();
   }
 
+  static RadioStation _withDarbhangaDeliveryFallback(RadioStation station) {
+    if (!station.isDarbhanga) return station;
+    final streams = <String, StationStream>{
+      AkashvaniApi.darbhangaDeliveryStreamUrl: const StationStream(
+        url: AkashvaniApi.darbhangaDeliveryStreamUrl,
+        hls: true,
+      ),
+      for (final stream in station.streams) stream.url: stream,
+    };
+    return station.copyWith(streams: streams.values.toList());
+  }
+
   static const _offlineSeeds = [
     RadioStation(
       id: 'air:69',
@@ -165,6 +178,7 @@ class CatalogueRepository {
       frequency: 1296,
       frequencyUnit: 'kHz',
       streams: [
+        StationStream(url: AkashvaniApi.darbhangaDeliveryStreamUrl, hls: true),
         StationStream(
           url:
               'https://airhlspush.pc.cdn.bitgravity.com/httppush/hlspbaudio160/hlspbaudio160_Auto.m3u8',
