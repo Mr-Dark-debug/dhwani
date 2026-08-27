@@ -21,6 +21,7 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(settingsProvider);
     final controller = ref.read(settingsProvider.notifier);
+    final updateCoordinator = ref.read(appUpdateCoordinatorProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: SafeArea(
@@ -250,42 +251,55 @@ class SettingsScreen extends ConsumerWidget {
               ),
               onTap: () => _about(context),
             ),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.system_update_rounded),
-              title: const Text('Check for updates'),
-              subtitle: const Text('Check GitHub Releases for new version'),
-              onTap: () async {
-                final messenger = ScaffoldMessenger.of(context);
-                messenger.showSnackBar(
-                  const SnackBar(
-                    content: Text('Checking for updates…'),
-                    duration: Duration(seconds: 1),
+            ListenableBuilder(
+              listenable: updateCoordinator,
+              builder: (context, _) {
+                final available = updateCoordinator.state.available;
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.system_update_rounded),
+                  title: const Text('Check for updates'),
+                  subtitle: Text(
+                    available == null
+                        ? 'Check GitHub Releases for new version'
+                        : 'Update available · v${available.version}',
                   ),
+                  onTap: () async {
+                    final messenger = ScaffoldMessenger.of(context);
+                    messenger.showSnackBar(
+                      const SnackBar(
+                        content: Text('Checking for updates…'),
+                        duration: Duration(seconds: 1),
+                      ),
+                    );
+                    final updater = ref.read(appUpdateServiceProvider);
+                    final result = await updateCoordinator.checkManually();
+                    if (!context.mounted) return;
+                    if (result case UpdateAvailable(:final release)) {
+                      updateCoordinator.takePresentation(release.tagName);
+                      AppUpdateSheet.show(
+                        context,
+                        release: release,
+                        updateService: updater,
+                      );
+                    } else if (result is UpdateUpToDate) {
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'You are on the latest version of Dhwani!',
+                          ),
+                        ),
+                      );
+                    } else {
+                      final message = switch (result) {
+                        UpdateCheckFailed(:final message) => message,
+                        UpdateCheckSkipped(:final message) => message,
+                        _ => 'The update check could not be completed.',
+                      };
+                      messenger.showSnackBar(SnackBar(content: Text(message)));
+                    }
+                  },
                 );
-                final updater = ref.read(appUpdateServiceProvider);
-                final result = await updater.checkForUpdate();
-                if (!context.mounted) return;
-                if (result case UpdateAvailable(:final release)) {
-                  AppUpdateSheet.show(
-                    context,
-                    release: release,
-                    updateService: updater,
-                  );
-                } else if (result is UpdateUpToDate) {
-                  messenger.showSnackBar(
-                    const SnackBar(
-                      content: Text('You are on the latest version of Dhwani!'),
-                    ),
-                  );
-                } else {
-                  final message = switch (result) {
-                    UpdateCheckFailed(:final message) => message,
-                    UpdateCheckSkipped(:final message) => message,
-                    _ => 'The update check could not be completed.',
-                  };
-                  messenger.showSnackBar(SnackBar(content: Text(message)));
-                }
               },
             ),
             ListTile(

@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:just_audio/just_audio.dart';
 
 enum PlaybackFailureReason {
+  offAir,
   offline,
   timeout,
   dns,
@@ -22,6 +23,15 @@ enum PlaybackFailureReason {
   runtimeDisconnect,
   unknown,
 }
+
+PlaybackFailure darbhangaOffAirFailure({String? diagnostic}) => PlaybackFailure(
+  reason: PlaybackFailureReason.offAir,
+  userTitle: 'Akashvani Darbhanga is currently off air',
+  userMessage:
+      '1296 kHz · Darbhanga, Bihar\nThe broadcaster is not publishing its internet stream right now.',
+  diagnostic:
+      diagnostic ?? 'The official Darbhanga HLS manifest returned 404 or 410.',
+);
 
 class PlaybackFailure {
   const PlaybackFailure({

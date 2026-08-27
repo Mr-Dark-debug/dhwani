@@ -393,3 +393,47 @@ Date: 2026-08-27 (Europe/Berlin)
 - `zipalign -c -P 16 -v 4`: verification successful.
 - Installed release verification: install succeeded; package reported version 1.4.1/build 7; `INTERNET` was granted and `POST_NOTIFICATIONS` remained denied; launch succeeded and the process exposed the expected media session.
 - Genuine boundary: Darbhanga's current upstream is discoverable and attempted correctly, but audible playback cannot be certified from the German network because the broadcaster did not deliver audio there.
+
+## 2026-08-28 — v1.4.3 update detection and Darbhanga resolver
+
+### Static and deterministic verification
+
+- `dart format .`: passed.
+- `flutter analyze`: passed with no issues.
+- `flutter test`: 99 passed, 0 failed.
+- Updater coverage: cold start, resume, separate timestamp writes, ten-minute failed retry, one-hour successful cooldown, manual bypass, concurrent deduplication, once-per-tag presentation, semantic/build ordering, prerelease rejection, 403, 429, and timeout safety.
+- Darbhanga coverage: structured channel `69` discovery, fresh-first ordering, seven-day last-known-good, three-failure invalidation, forced refresh, WAVES redirect capture, rotating CDN, stale/404 source recovery, bounded redirect loop, HLS validation, off-air, timeout, DNS, TLS/reset, page outage, deduplication, and non-Darbhanga stream-order identity.
+
+### Android real-network integration
+
+- Device: Pixel 10-equivalent API 36 emulator, serial `emulator-5554`.
+- Radio Swiss Jazz reached PLAYING and PAUSED.
+- Deutschlandfunk reached PLAYING.
+- Akashvani Live News 24x7 reached PLAYING and delivered HLS media.
+- Next, Previous, Play/Pause, and Recents passed in one queue regression.
+- Real FFmpeg recording produced validated original and converted audio and passed cleanup.
+- Retro tuner and player controls remained covered by the passing widget regression suite.
+
+### Darbhanga real-network boundary
+
+- Test time: 04:33 IST, outside a confirmed active-broadcast window.
+- Official WAVES request: connection reset on the German route.
+- Legacy BitGravity request: HTTP 404.
+- Old direct CloudFront candidate did not produce media within the bounded station deadline.
+- Result: terminal `unavailable`/network failure, no crash, no infinite loader, and no false LIVE state.
+- Actual Darbhanga audio and media segments were **not** observed; active-broadcast PLAYING is not claimed.
+
+### Permissions and isolation
+
+- Android manifest retains INTERNET, network-state, wake-lock, media foreground-service, notification, boot, and package-installer declarations.
+- INTERNET and network-state are install-time normal permissions. Playback is not blocked on the notification runtime prompt; reminders request notification permission contextually, and the updater opens unknown-app-source settings only when installation requires it.
+- No dependency, general player, recording, navigation, UI theme, retro tuner, other-country, or other-station routing change was made.
+
+### Local release candidate
+
+- APK: `build/app/outputs/flutter-apk/app-release.apk`, 180,006,611 bytes, SHA-256 `AD97652554762E2418F11D2E8B0F31567A7A124DAD181481B48F78B44FA24659`.
+- AAB: `build/app/outputs/bundle/release/app-release.aab`, 111,674,382 bytes, SHA-256 `CB0600CD612E1A5AA8B5197EEB70FB70680299E3E2E73585749A382E433F0241`.
+- APK package `com.prashant.dhwani`, version `1.4.3`, build `9`, min SDK 24, target/compile SDK 36.
+- APK Signature Scheme v2 verified with the existing lineage SHA-256 `F11E976967911C8E585DD88817D6587076A802840699EEBF7E3C8304BEDBE3B5`.
+- `adb install -r` passed; Android reported version `1.4.3` / build `9` after installation.
+- The protected GitHub tag workflow remains the source of the published APK/AAB and final public checksums.

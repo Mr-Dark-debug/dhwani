@@ -16,6 +16,7 @@ import 'core/recording/recording_service.dart';
 import 'core/notifications/notification_service.dart';
 import 'core/settings/settings_controller.dart';
 import 'data/datasources/akashvani_api.dart';
+import 'data/datasources/akashvani_darbhanga_resolver.dart';
 import 'data/datasources/radio_browser_api.dart';
 import 'data/repositories/catalogue_repository.dart';
 
@@ -49,18 +50,30 @@ Future<void> _startApp() async {
 
   final database = AppDatabase();
   final preferences = await SharedPreferences.getInstance();
+  final darbhangaResolver = AkashvaniDarbhangaResolver(
+    preferences: preferences,
+  );
   final audioHandler = await AudioService.init(
     builder: () => DhwaniAudioHandler(
       onSessionStarted: database.startHistorySession,
       onSessionUpdated: database.updateHistorySession,
-      onStreamResult: (station, stream, success, failure, startupTime) =>
-          database.recordStreamResult(
-            station,
+      darbhangaResolver: darbhangaResolver,
+      onStreamResult: (station, stream, success, failure, startupTime) async {
+        await database.recordStreamResult(
+          station,
+          stream.url,
+          success: success,
+          failureReason: failure?.reason.name,
+          startupTime: startupTime,
+        );
+        if (station.isDarbhanga) {
+          await darbhangaResolver.recordPlaybackResult(
             stream.url,
             success: success,
             failureReason: failure?.reason.name,
-            startupTime: startupTime,
-          ),
+          );
+        }
+      },
     ),
     config: const AudioServiceConfig(
       androidNotificationChannelId: 'com.prashant.dhwani.playback',
@@ -74,7 +87,7 @@ Future<void> _startApp() async {
   final catalogue = CatalogueRepository(
     database: database,
     radioBrowser: RadioBrowserApi(),
-    akashvani: AkashvaniApi(),
+    akashvani: AkashvaniApi(darbhangaResolver: darbhangaResolver),
   );
   final recorder = RecordingService(database: database);
   final notifications = NotificationService(

@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -14,9 +15,14 @@ import '../features/settings/settings_screen.dart';
 import '../data/models/radio_station.dart';
 import 'providers.dart';
 
+final rootNavigatorKeyProvider = Provider<GlobalKey<NavigatorState>>(
+  (ref) => GlobalKey<NavigatorState>(),
+);
+
 final routerProvider = Provider<GoRouter>((ref) {
   final preferences = ref.read(preferencesProvider);
   return GoRouter(
+    navigatorKey: ref.read(rootNavigatorKeyProvider),
     initialLocation: preferences.getBool('onboardingComplete') == true
         ? '/radio'
         : '/welcome',

@@ -25,10 +25,6 @@ void main() {
       );
       expect(
         station.streams.first.url,
-        AkashvaniApi.darbhangaDeliveryStreamUrl,
-      );
-      expect(
-        station.streams[1].url,
         'https://radio.wavespb.com/live/current/darbhanga.m3u8',
       );
       expect(

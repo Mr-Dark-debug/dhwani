@@ -104,3 +104,13 @@ TuneIn, Simple Radio, myTuner, Radio Garden, and Radioplayer were reviewed at a 
 - The public Akashvani feed was served as `text/plain` on the physical Android device. Dio therefore returned a JSON String; accepting both String and decoded List fixed the reproduced `FormatException`.
 - On 2026-08-27 the official live page still published Darbhanga as `https://radio.wavespb.com/live/8e074285599ed45d/8e074285599ed45d.m3u8`; the GitHub feed still carried the older BitGravity `pbaudio160` URL.
 - Distributed HTTP probes reached the WAVES endpoint with HTTP 302 from 20 nodes, including Kolkata, while the connected Pixel and Windows host in Germany received a connection reset. This supports a network/upstream boundary rather than a missing Android permission.
+
+## 2026-08-28 — Root updater and official Darbhanga delivery inspection
+
+- The official player page remains `https://akashvani.gov.in/radio/live.php`. Browser/network inspection showed that it server-renders an inline `channels` JavaScript object; selecting Darbhanga issues a direct HLS GET rather than a structured JSON/XHR playback request.
+- Darbhanga's official catalogue key is `69`; its current object names `Akashvani Darbhanga` and supplies `live_url: https://radio.wavespb.com/live/8e074285599ed45d/8e074285599ed45d.m3u8`. Its official EPG link identifies cuesheet `333`.
+- `8e074285599ed45d` is the current stream-path identifier and has remained unchanged across observed pages, but no official evidence defines it as permanent. Dhwani therefore treats it as mutable delivery metadata, not the canonical station identity.
+- The official WAVES URL has produced redirects to a CloudFront delivery distribution on reachable networks; the German host/emulator route currently receives a connection reset instead. Resolver code follows and records any live redirect target, but does not persist a CloudFront hostname as the sole source.
+- HLS discovery uses a bounded GET (not HEAD), follows at most five HTTPS redirects, reads at most 64 KiB, and requires `#EXTM3U` plus playlist entries and a media/variant URI.
+- Prasar Bharati's current station document continues to list Darbhanga as 20 kW MW on 1296 kHz. The official live catalogue identifies Bihar and Maithili/Hindi; RF metadata remains separate from internet availability.
+- GitHub's latest release endpoint remains `https://api.github.com/repos/Mr-Dark-debug/dhwani/releases/latest`; installed version/build continue to come from `package_info_plus`. A successful parsed response, not an attempted request, now advances the automatic success timestamp.

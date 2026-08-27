@@ -15,7 +15,7 @@ void main() {
       expect(AppUpdateService.isNewerVersion('v1.1.0', '1.0.0'), isTrue);
       expect(AppUpdateService.isNewerVersion('1.0.1', '1.0.0'), isTrue);
       expect(AppUpdateService.isNewerVersion('v2.0.0', '1.0.0+2'), isTrue);
-      expect(AppUpdateService.isNewerVersion('1.1.0-beta', '1.0.0'), isTrue);
+      expect(AppUpdateService.isNewerVersion('1.1.0-beta', '1.0.0'), isFalse);
     });
 
     test('correctly identifies older or equal versions', () {
@@ -23,6 +23,54 @@ void main() {
       expect(AppUpdateService.isNewerVersion('1.0.0', '1.0.0+2'), isFalse);
       expect(AppUpdateService.isNewerVersion('v0.9.9', '1.0.0'), isFalse);
       expect(AppUpdateService.isNewerVersion('0.8.0', '1.0.0'), isFalse);
+    });
+
+    test('requires semantic and Android build identities not to downgrade', () {
+      expect(
+        AppUpdateService.compareReleaseIdentity(
+          remoteVersion: '1.4.3',
+          remoteBuild: 9,
+          installedVersion: '1.4.2',
+          installedBuild: 8,
+        ),
+        greaterThan(0),
+      );
+      expect(
+        AppUpdateService.compareReleaseIdentity(
+          remoteVersion: '1.4.2',
+          remoteBuild: 9,
+          installedVersion: '1.4.2',
+          installedBuild: 8,
+        ),
+        greaterThan(0),
+      );
+      expect(
+        AppUpdateService.compareReleaseIdentity(
+          remoteVersion: '1.4.3',
+          remoteBuild: 9,
+          installedVersion: '1.4.3',
+          installedBuild: 9,
+        ),
+        0,
+      );
+      expect(
+        AppUpdateService.compareReleaseIdentity(
+          remoteVersion: '1.4.3',
+          remoteBuild: 9,
+          installedVersion: '1.4.3',
+          installedBuild: 10,
+        ),
+        lessThan(0),
+      );
+      expect(
+        AppUpdateService.compareReleaseIdentity(
+          remoteVersion: '1.4.4',
+          remoteBuild: 9,
+          installedVersion: '1.4.3',
+          installedBuild: 10,
+        ),
+        lessThan(0),
+      );
     });
 
     test('formats release size properly', () {
@@ -144,6 +192,21 @@ void main() {
       );
 
       expect(await service.checkForUpdate(), isA<UpdateUpToDate>());
+    });
+
+    test('stable parser rejects semantic prerelease suffixes', () async {
+      for (final version in ['1.4.3-beta', '1.4.3-rc1']) {
+        final service = AppUpdateService(
+          dio: Dio()
+            ..httpClientAdapter = _UpdateAdapter.release(
+              _releasePayload(version: version, build: 9),
+            ),
+          identityLoader: _identity,
+          installerChannel: channel,
+        );
+
+        expect(await service.checkForUpdate(), isA<UpdateCheckFailed>());
+      }
     });
 
     test('malformed version or missing apk fails explicitly', () async {

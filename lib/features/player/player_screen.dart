@@ -15,8 +15,6 @@ import '../../core/recording/recording_service.dart';
 import '../../core/settings/settings_controller.dart';
 import '../../core/widgets/dhwani_dropdown.dart';
 import '../../core/widgets/dhwani_shell.dart';
-import '../../core/updater/app_update_sheet.dart';
-import '../../core/updater/app_update_service.dart';
 import '../../data/models/radio_station.dart';
 import 'sleep_timer_sheet.dart';
 
@@ -29,26 +27,6 @@ class PlayerScreen extends ConsumerStatefulWidget {
 
 class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   bool _restored = false;
-  bool _updateChecked = false;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!_updateChecked && mounted) {
-        _updateChecked = true;
-        final updater = ref.read(appUpdateServiceProvider);
-        final result = await updater.checkForUpdate(manual: false);
-        if (result case UpdateAvailable(:final release) when mounted) {
-          AppUpdateSheet.show(
-            context,
-            release: release,
-            updateService: updater,
-          );
-        }
-      }
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -1563,6 +1541,7 @@ String _statusLabel(DhwaniPlaybackStatus status) => switch (status) {
   DhwaniPlaybackStatus.playing => 'Live',
   DhwaniPlaybackStatus.paused => 'Paused',
   DhwaniPlaybackStatus.reconnecting => 'Reconnecting…',
+  DhwaniPlaybackStatus.offAir => 'Currently off air',
   DhwaniPlaybackStatus.offline => 'Offline',
   DhwaniPlaybackStatus.geoBlocked => 'Unavailable here',
   DhwaniPlaybackStatus.unsupported => 'Unsupported stream',
@@ -1573,6 +1552,7 @@ String _statusLabel(DhwaniPlaybackStatus status) => switch (status) {
 bool _isTerminalPlaybackFailure(DhwaniPlaybackStatus? status) =>
     status == DhwaniPlaybackStatus.error ||
     status == DhwaniPlaybackStatus.unavailable ||
+    status == DhwaniPlaybackStatus.offAir ||
     status == DhwaniPlaybackStatus.offline ||
     status == DhwaniPlaybackStatus.geoBlocked ||
     status == DhwaniPlaybackStatus.unsupported;

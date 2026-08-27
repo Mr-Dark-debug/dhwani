@@ -5,7 +5,6 @@ import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../logging/dhwani_log.dart';
 
@@ -111,8 +110,6 @@ class AppUpdateService {
            const MethodChannel('com.prashant.dhwani/installer');
 
   static const String githubRepo = 'Mr-Dark-debug/dhwani';
-  static const String _lastAutomaticCheckKey = 'updateLastAutomaticCheck';
-  static const Duration automaticCheckCooldown = Duration(hours: 12);
 
   final Dio _dio;
   final AppIdentityLoader _identityLoader;
@@ -121,8 +118,9 @@ class AppUpdateService {
   final String expectedSigningCertificateSha256;
 
   static bool isNewerVersion(String remoteTag, String localVersion) {
-    final remote = _semanticParts(remoteTag);
+    final remote = _semanticParts(remoteTag, strict: true);
     final local = _semanticParts(localVersion);
+    if (remote == null || local == null) return false;
     for (var index = 0; index < 3; index++) {
       if (remote[index] > local[index]) return true;
       if (remote[index] < local[index]) return false;
@@ -130,26 +128,12 @@ class AppUpdateService {
     return false;
   }
 
-  Future<UpdateCheckResult> checkForUpdate({bool manual = true}) async {
-    if (!manual) {
-      final preferences = await SharedPreferences.getInstance();
-      final previous = DateTime.tryParse(
-        preferences.getString(_lastAutomaticCheckKey) ?? '',
-      );
-      if (previous != null &&
-          DateTime.now().difference(previous) < automaticCheckCooldown) {
-        return const UpdateCheckSkipped(
-          'Automatic update check is in its cooldown period.',
-        );
-      }
-      await preferences.setString(
-        _lastAutomaticCheckKey,
-        DateTime.now().toIso8601String(),
-      );
-    }
-
+  Future<UpdateCheckResult> checkForUpdate() async {
     try {
       final identity = await _identityLoader();
+      DhwaniLog.api(
+        'Update lookup current=${identity.version}+${identity.buildNumber}',
+      );
       final response = await _dio.get<Map<String, Object?>>(
         'https://api.github.com/repos/$githubRepo/releases/latest',
       );
@@ -163,6 +147,7 @@ class AppUpdateService {
       final tagName = data['tag_name']?.toString().trim() ?? '';
       final version = tagName.replaceFirst(RegExp(r'^[vV]'), '');
       if (!_isStableVersion(version)) {
+        DhwaniLog.api('Update lookup rejected non-stable tag=$tagName');
         return const UpdateCheckFailed(
           'The newest release does not use a stable semantic version.',
         );
@@ -212,14 +197,20 @@ class AppUpdateService {
           ? int.tryParse(apkBuildMatch.group(1)!) ?? 0
           : 0;
 
-      // Determine if remote version is newer than current app version
+      DhwaniLog.api('Update lookup remote=$version+$buildNumber');
       final newer =
-          isNewerVersion(version, identity.version) ||
-          (version == identity.version &&
-              buildNumber > 0 &&
-              buildNumber > identity.buildNumber);
+          compareReleaseIdentity(
+            remoteVersion: version,
+            remoteBuild: buildNumber,
+            installedVersion: identity.version,
+            installedBuild: identity.buildNumber,
+          ) >
+          0;
 
-      if (!newer) return const UpdateUpToDate();
+      if (!newer) {
+        DhwaniLog.api('Update lookup completed: no update');
+        return const UpdateUpToDate();
+      }
 
       // Extract checksum from GitHub asset digest (SHA-256) or explicit .sha256 file
       String? expectedSha256;
@@ -240,7 +231,7 @@ class AppUpdateService {
       final checksumUrl =
           checksumAsset?['browser_download_url']?.toString() ?? '';
 
-      return UpdateAvailable(
+      final available = UpdateAvailable(
         AppReleaseInfo(
           version: version,
           buildNumber: buildNumber,
@@ -257,8 +248,10 @@ class AppUpdateService {
           ),
         ),
       );
+      DhwaniLog.api('Update lookup completed: update available $tagName');
+      return available;
     } on DioException catch (error, stack) {
-      DhwaniLog.api('Failed to check for updates', error, stack);
+      DhwaniLog.api('Update lookup network failure', error, stack);
       final rateLimited =
           error.response?.statusCode == 403 ||
           error.response?.statusCode == 429;
@@ -268,7 +261,7 @@ class AppUpdateService {
             : 'Could not reach GitHub Releases. Check the connection and retry.',
       );
     } catch (error, stack) {
-      DhwaniLog.api('Failed to check for updates', error, stack);
+      DhwaniLog.api('Update lookup parsing failure', error, stack);
       return const UpdateCheckFailed(
         'The update response could not be verified.',
       );
@@ -367,9 +360,7 @@ class AppUpdateService {
           );
         }
 
-        if (versionCode > 0 &&
-            versionCode < identity.buildNumber &&
-            !isNewerVersion(release.version, identity.version)) {
+        if (versionCode > 0 && versionCode <= identity.buildNumber) {
           throw const UpdateVerificationException(
             'The downloaded APK build identity is not a newer build.',
           );
@@ -444,17 +435,44 @@ class AppUpdateService {
     );
   }
 
-  static List<int> _semanticParts(String value) {
+  static int compareReleaseIdentity({
+    required String remoteVersion,
+    required int remoteBuild,
+    required String installedVersion,
+    required int installedBuild,
+  }) {
+    final remote = _semanticParts(remoteVersion, strict: true);
+    final installed = _semanticParts(installedVersion);
+    if (remote == null || installed == null) return -1;
+    var semanticComparison = 0;
+    for (var index = 0; index < 3; index++) {
+      semanticComparison = remote[index].compareTo(installed[index]);
+      if (semanticComparison != 0) break;
+    }
+    // Legacy GitHub releases may use app-release.apk without a build number.
+    // In that case semantic discovery remains possible, while the downloaded
+    // archive's real Android versionCode is still required to increase.
+    if (remoteBuild <= 0) return semanticComparison;
+    final buildComparison = remoteBuild.compareTo(installedBuild);
+    if (semanticComparison < 0 || buildComparison < 0) return -1;
+    if (semanticComparison > 0 || buildComparison > 0) return 1;
+    return 0;
+  }
+
+  static List<int>? _semanticParts(String value, {bool strict = false}) {
     final clean = value.replaceFirst(RegExp(r'^[vV]'), '').trim();
-    final match = RegExp(r'^(\d+)\.(\d+)\.(\d+)').firstMatch(clean);
-    if (match == null) return const [0, 0, 0];
+    final pattern = strict
+        ? RegExp(r'^(\d+)\.(\d+)\.(\d+)$')
+        : RegExp(r'^(\d+)\.(\d+)\.(\d+)(?:\+\d+)?$');
+    final match = pattern.firstMatch(clean);
+    if (match == null) return null;
     return [
       for (var index = 1; index <= 3; index++) int.parse(match.group(index)!),
     ];
   }
 
   static bool _isStableVersion(String value) =>
-      RegExp(r'^\d+\.\d+\.\d+').hasMatch(value);
+      RegExp(r'^\d+\.\d+\.\d+$').hasMatch(value);
 
   static bool _isGitHubAssetUrl(String value) {
     final uri = Uri.tryParse(value);

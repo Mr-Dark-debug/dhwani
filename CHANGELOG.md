@@ -2,6 +2,29 @@
 
 All notable Dhwani changes are recorded here. Versions follow semantic versioning; Android build numbers remain strictly increasing.
 
+## [1.4.3] - 2026-08-28
+
+### Fixed
+
+- Automatic GitHub release checks now run after the root app's first frame and whenever the app resumes, independently of PlayerScreen navigation.
+- Successful checks use a one-hour cooldown; failed checks use a ten-minute retry delay and never advance the successful timestamp. Manual checks always bypass both cooldowns.
+- Update availability remains in application state, Settings exposes the detected version, simultaneous checks are deduplicated, and each release sheet is presented at most once per foreground process session.
+- Stable release parsing now rejects beta/RC suffixes, and update ordering requires neither semantic version nor Android build number to move backward.
+- Akashvani Darbhanga now discovers official channel `69` structurally from the current Akashvani page, validates HLS with a bounded GET, follows delivery redirects, retains a seven-day last-known-good stream, and refreshes once after candidate failure.
+- A broadcaster 404/410 is represented as “currently off air”; network, DNS, TLS, timeout, and discovery failures remain distinct and bounded.
+
+### Verification
+
+- Flutter analyzer passed with no issues and all 99 unit/widget tests passed.
+- Android integration confirmed actual PLAYING for Radio Swiss Jazz, Deutschlandfunk, and Akashvani Live News 24x7; Next, Previous, Play/Pause, Recents, and real recording passed.
+- Darbhanga resolver tests cover source rotation, redirect/CDN changes, last-known-good invalidation, off-air, network failures, deduplication, and non-Darbhanga isolation.
+- The overnight Darbhanga real-network probe did not receive media: WAVES was reset on the German route and legacy delivery URLs were unavailable. No live-audio success is claimed for that off-air/network window.
+
+### Compatibility
+
+- Version `1.4.3+9`, Android min SDK 24, compile/target SDK 36.
+- No dependency, navigation, recording, theme, retro tuner, general player, or signing-lineage change.
+
 ## [1.4.2] - 2026-08-27
 
 ### Fixed

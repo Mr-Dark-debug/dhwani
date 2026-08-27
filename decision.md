@@ -996,3 +996,66 @@ This removes three device-dependent gates from the user's Play action without ad
 
 ### Revisit if
 Android introduces a reliable validated-network callback that is guaranteed not to race app startup, or media notification exemption rules change.
+
+## DEC-0034 — Own automatic updates at the root application lifecycle
+
+Date: 2026-08-28
+Status: Accepted
+
+### Question
+Where should non-blocking automatic update discovery live, and when should cooldown timestamps advance?
+
+### Options considered
+- Keep the check as a PlayerScreen initialization side effect
+- Write one timestamp before every attempted request
+- Coordinate cold-start, resume, manual, cooldown, retained release, and presentation state at the app root
+
+### Research / evidence
+- PlayerScreen navigation/rebuilds are not application lifecycle events.
+- The previous attempted-check timestamp prevented retry after GitHub failure and could delay detection of a release published minutes later.
+- GitHub 403/429 and timeouts are ordinary recoverable conditions and must not delay first frame or playback.
+
+### Decision
+Use one root-owned coordinator. Start after the first frame and on resume; share concurrent requests; record successful and failed timestamps separately; use one hour after success and ten minutes after failure; always bypass cooldown manually; retain a detected release in state and present each tag once per process session.
+
+### Why
+The lifecycle owner can retry safely without coupling checks to player navigation, and a timestamp now represents what its name claims.
+
+### Trade-offs
+- Automatic checks require a small application-level state object.
+- A killed process retains cooldown timestamps but not a previously displayed sheet instance.
+
+### Revisit if
+GitHub's unauthenticated rate policy requires a longer adaptive backoff or Dhwani later adds update channels.
+
+## DEC-0035 — Resolve Darbhanga by official channel identity and validated playback evidence
+
+Date: 2026-08-28
+Status: Accepted
+
+### Question
+How can Darbhanga survive delivery-CDN changes without altering other station behavior or falsely promising 24/7 audio?
+
+### Options considered
+- Promote one CloudFront hostname permanently
+- Continue scanning 1,000 characters after the station name
+- Parse official channel `69`, validate bounded HLS, retain playback-proven last-known-good state, and refresh once after failure
+
+### Research / evidence
+- The official page server-renders a `channels` object and starts Darbhanga by reading its `live_url`; no playback JSON/XHR API was observed.
+- The current stream-path token `8e074285599ed45d` is not documented as a permanent station identifier, while channel `69` identifies the station in the official catalogue.
+- WAVES can redirect to a delivery CDN, but the redirect target and CDN distribution are delivery details that can change.
+- Overnight observations included reset and 404 behavior without media, consistent with either route filtering or a scheduled broadcaster not publishing a manifest.
+
+### Decision
+Restrict a dedicated resolver to `RadioStation.isDarbhanga`. Prefer fresh official metadata, playback-proven cache, redirect-derived delivery, station feed, then emergency URLs. Validate HLS with a bounded GET, deduplicate, cap redirects, refresh once within the station deadline, and distinguish official 404/410 off-air from transport/discovery failures.
+
+### Why
+Future official URL or CDN changes can be learned at runtime, while every non-Darbhanga station keeps its existing stream list and player behavior.
+
+### Trade-offs
+- If the listener's network resets WAVES before exposing its redirect, dynamic discovery cannot learn that redirect on that route and must rely on cache/fallbacks.
+- A real active-window probe is still required before claiming Darbhanga audio actually flowed.
+
+### Revisit if
+Akashvani publishes a documented station JSON API or authenticated/signed stream-discovery protocol.

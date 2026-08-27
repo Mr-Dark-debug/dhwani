@@ -1526,6 +1526,7 @@ String _statusLabel(DhwaniPlaybackStatus status) => switch (status) {
   DhwaniPlaybackStatus.playing => 'Live',
   DhwaniPlaybackStatus.paused => 'Paused',
   DhwaniPlaybackStatus.reconnecting => 'Reconnecting…',
+  DhwaniPlaybackStatus.offAir => 'Currently off air',
   DhwaniPlaybackStatus.offline => 'Offline',
   DhwaniPlaybackStatus.geoBlocked => 'Unavailable here',
   DhwaniPlaybackStatus.unsupported => 'Unsupported stream',

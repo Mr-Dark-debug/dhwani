@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:dhwani/core/audio/dhwani_audio_engine.dart';
 import 'package:dhwani/core/audio/dhwani_audio_handler.dart';
 import 'package:dhwani/core/audio/playback_failure.dart';
+import 'package:dhwani/data/datasources/akashvani_darbhanga_resolver.dart';
 import 'package:dhwani/data/models/radio_station.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart';
 
@@ -110,6 +113,82 @@ void main() {
       );
       await handler.disposeHandler();
     });
+
+    test(
+      'Darbhanga refresh learns a changed CDN and reaches playing',
+      () async {
+        final dio = Dio()..httpClientAdapter = _RotatingDarbhangaAdapter();
+        final resolver = AkashvaniDarbhangaResolver(dio: dio);
+        final failures = {
+          'https://old.test/darbhanga.m3u8',
+          'https://feed.test/darbhanga.m3u8',
+          AkashvaniDarbhangaResolver.currentWavesFallback,
+          AkashvaniDarbhangaResolver.currentDeliveryFallback,
+          AkashvaniDarbhangaResolver.legacyBitgravityFallback,
+        };
+        final engine = FakeAudioEngine(failingUrls: failures);
+        final handler = DhwaniAudioHandler(
+          engine: engine,
+          darbhangaResolver: resolver,
+          enablePlatformIntegrations: false,
+          connectivityCheck: () async => [ConnectivityResult.wifi],
+          perSourceTimeout: const Duration(milliseconds: 100),
+          stationTimeout: const Duration(seconds: 1),
+          playConfirmationTimeout: const Duration(milliseconds: 100),
+        );
+        final station = _darbhangaStation('https://feed.test/darbhanga.m3u8');
+
+        await handler.tuneStation(
+          station,
+          queueStations: [station],
+          autoplay: true,
+        );
+
+        expect(engine.loadedUrls.last, 'https://fresh.test/darbhanga.m3u8');
+        expect(handler.snapshot.value.status, DhwaniPlaybackStatus.playing);
+        await handler.disposeHandler();
+      },
+    );
+
+    test(
+      'Darbhanga official 404 finishes as off air without looping',
+      () async {
+        final dio = Dio()..httpClientAdapter = _OffAirDarbhangaAdapter();
+        final resolver = AkashvaniDarbhangaResolver(dio: dio);
+        final urls = {
+          AkashvaniDarbhangaResolver.currentWavesFallback,
+          AkashvaniDarbhangaResolver.currentDeliveryFallback,
+          AkashvaniDarbhangaResolver.legacyBitgravityFallback,
+        };
+        final engine = FakeAudioEngine(failingUrls: urls);
+        final handler = DhwaniAudioHandler(
+          engine: engine,
+          darbhangaResolver: resolver,
+          enablePlatformIntegrations: false,
+          connectivityCheck: () async => [ConnectivityResult.wifi],
+          perSourceTimeout: const Duration(milliseconds: 100),
+          stationTimeout: const Duration(seconds: 1),
+          playConfirmationTimeout: const Duration(milliseconds: 100),
+        );
+        final station = _darbhangaStation(
+          AkashvaniDarbhangaResolver.currentWavesFallback,
+        );
+
+        await handler.tuneStation(
+          station,
+          queueStations: [station],
+          autoplay: true,
+        );
+
+        expect(handler.snapshot.value.status, DhwaniPlaybackStatus.offAir);
+        expect(
+          handler.snapshot.value.failure?.userTitle,
+          'Akashvani Darbhanga is currently off air',
+        );
+        expect(engine.loadedUrls.length, lessThanOrEqualTo(urls.length));
+        await handler.disposeHandler();
+      },
+    );
 
     test(
       'failed connection never creates a listening-history session',
@@ -363,6 +442,68 @@ RadioStation _station(String id, String url, {String? alternative}) =>
       ],
       directory: RadioDirectory.custom,
     );
+
+RadioStation _darbhangaStation(String url) => RadioStation(
+  id: 'air:69',
+  name: 'Akashvani Darbhanga',
+  country: 'India',
+  countryCode: 'IN',
+  state: 'Bihar',
+  city: 'Darbhanga',
+  band: RadioBand.am,
+  frequency: 1296,
+  frequencyUnit: 'kHz',
+  streams: [StationStream(url: url, hls: true)],
+  directory: RadioDirectory.akashvani,
+);
+
+class _RotatingDarbhangaAdapter implements HttpClientAdapter {
+  var pageRequests = 0;
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    if (options.uri.toString() ==
+        AkashvaniDarbhangaResolver.officialLivePageUrl) {
+      pageRequests++;
+      final host = pageRequests == 1 ? 'old.test' : 'fresh.test';
+      return ResponseBody.fromString(
+        "var channels = {'69': {name: 'Akashvani Darbhanga', "
+        "live_url: 'https://$host/darbhanga.m3u8'}};",
+        200,
+      );
+    }
+    return ResponseBody.fromString('#EXTM3U\n#EXTINF:10,\nsegment.aac\n', 200);
+  }
+
+  @override
+  void close({bool force = false}) {}
+}
+
+class _OffAirDarbhangaAdapter implements HttpClientAdapter {
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    if (options.uri.toString() ==
+        AkashvaniDarbhangaResolver.officialLivePageUrl) {
+      return ResponseBody.fromString(
+        "var channels = {'69': {name: 'Akashvani Darbhanga', "
+        "live_url: '${AkashvaniDarbhangaResolver.currentWavesFallback}'}};",
+        200,
+      );
+    }
+    return ResponseBody.fromString('', 404);
+  }
+
+  @override
+  void close({bool force = false}) {}
+}
 
 class FakeAudioEngine implements DhwaniAudioEngine {
   FakeAudioEngine({

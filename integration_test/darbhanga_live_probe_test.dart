@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:dhwani/core/audio/dhwani_audio_handler.dart';
 import 'package:dhwani/data/datasources/akashvani_api.dart';
+import 'package:dhwani/data/datasources/akashvani_darbhanga_resolver.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
@@ -22,11 +23,12 @@ void main() {
     addTearDown(
       () => PlatformDispatcher.instance.onError = previousPlatformErrorHandler,
     );
-    final audio = DhwaniAudioHandler();
+    final resolver = AkashvaniDarbhangaResolver();
+    final audio = DhwaniAudioHandler(darbhangaResolver: resolver);
     addTearDown(audio.disposeHandler);
-    final station = (await AkashvaniApi().stations()).singleWhere(
-      (item) => item.isDarbhanga,
-    );
+    final station = (await AkashvaniApi(
+      darbhangaResolver: resolver,
+    ).stations()).singleWhere((item) => item.isDarbhanga);
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
     addTearDown(client.close);
     for (final stream in station.streams.take(2)) {
@@ -64,13 +66,13 @@ void main() {
     });
     addTearDown(subscription.cancel);
 
-    expect(station.streams.first.url, AkashvaniApi.darbhangaDeliveryStreamUrl);
+    expect(station.streams.first.url, contains('radio.wavespb.com/live/'));
     await audio
         .tuneStation(station, queueStations: [station], autoplay: true)
         .timeout(const Duration(seconds: 30));
 
     expect(attemptedHosts, isNotEmpty);
-    expect(attemptedHosts.first, 'd3hrxqn1tritdh.cloudfront.net');
+    expect(attemptedHosts.first, 'radio.wavespb.com');
     expect(audio.snapshot.value.busy, isFalse);
     // Darbhanga is geo/network dependent. A bounded unavailable result is
     // truthful; PLAYING is recorded when the current network can reach India.
@@ -78,6 +80,7 @@ void main() {
       audio.snapshot.value.status,
       anyOf(
         DhwaniPlaybackStatus.playing,
+        DhwaniPlaybackStatus.offAir,
         DhwaniPlaybackStatus.unavailable,
         DhwaniPlaybackStatus.geoBlocked,
         DhwaniPlaybackStatus.unsupported,

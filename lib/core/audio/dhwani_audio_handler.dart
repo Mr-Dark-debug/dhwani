@@ -8,6 +8,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:rxdart/rxdart.dart';
 
 import '../../data/models/radio_station.dart';
+import '../../data/datasources/akashvani_darbhanga_resolver.dart';
 import '../logging/dhwani_log.dart';
 import '../widgets/home_widget_sync.dart';
 import 'dhwani_audio_engine.dart';
@@ -24,6 +25,7 @@ enum DhwaniPlaybackStatus {
   playing,
   paused,
   reconnecting,
+  offAir,
   unavailable,
   offline,
   geoBlocked,
@@ -81,9 +83,11 @@ class DhwaniAudioHandler extends BaseAudioHandler
     bool enablePlatformIntegrations = true,
     Future<List<ConnectivityResult>> Function()? connectivityCheck,
     Stream<List<ConnectivityResult>>? connectivityChanges,
+    AkashvaniDarbhangaResolver? darbhangaResolver,
   }) : _onSessionStarted = onSessionStarted,
        _onSessionUpdated = onSessionUpdated,
        _onStreamResult = onStreamResult,
+       _darbhangaResolver = darbhangaResolver,
        _connectivityCheck =
            connectivityCheck ?? Connectivity().checkConnectivity {
     if (engine == null) {
@@ -114,6 +118,7 @@ class DhwaniAudioHandler extends BaseAudioHandler
   )?
   _onStreamResult;
   final Future<List<ConnectivityResult>> Function() _connectivityCheck;
+  final AkashvaniDarbhangaResolver? _darbhangaResolver;
 
   final Duration perSourceTimeout;
   final Duration stationTimeout;
@@ -475,7 +480,26 @@ class DhwaniAudioHandler extends BaseAudioHandler
       );
     }
 
-    final streams = _playableStreams(station);
+    final started = DateTime.now();
+    final deadline = started.add(stationTimeout);
+    var playbackStation = station;
+    DarbhangaResolution? darbhangaResolution;
+    if (station.isDarbhanga && _darbhangaResolver != null) {
+      try {
+        darbhangaResolution = await _darbhangaResolver
+            .resolve(station: station)
+            .timeout(_minimumDuration(perSourceTimeout, stationTimeout));
+        playbackStation = darbhangaResolution.applyTo(station);
+      } catch (error, stack) {
+        DhwaniLog.player(
+          'Darbhanga discovery failed; trying known station sources',
+          error,
+          stack,
+        );
+      }
+    }
+
+    final streams = _playableStreams(playbackStation);
     if (streams.isEmpty) {
       final failure = noPlayableStreamFailure();
       _lastFailure = failure;
@@ -493,13 +517,14 @@ class DhwaniAudioHandler extends BaseAudioHandler
       );
     }
 
-    final started = DateTime.now();
-    final deadline = started.add(stationTimeout);
     Object? lastError;
     StackTrace? lastStack;
     PlaybackFailure? lastFailure;
     final attempted = <String>{};
-    for (final stream in streams) {
+    var nextStream = 0;
+    var darbhangaRefreshAttempted = false;
+    while (nextStream < streams.length) {
+      final stream = streams[nextStream++];
       if (!_isActive(operation, station)) return;
       if (!attempted.add(stream.url)) continue;
       final remaining = deadline.difference(DateTime.now());
@@ -584,9 +609,51 @@ class DhwaniAudioHandler extends BaseAudioHandler
         lastError,
         lastStack,
       );
+      if (nextStream >= streams.length &&
+          station.isDarbhanga &&
+          _darbhangaResolver != null &&
+          !darbhangaRefreshAttempted &&
+          deadline.isAfter(DateTime.now())) {
+        darbhangaRefreshAttempted = true;
+        try {
+          darbhangaResolution = await _darbhangaResolver
+              .resolve(station: station, forceRefresh: true)
+              .timeout(
+                _minimumDuration(
+                  perSourceTimeout,
+                  deadline.difference(DateTime.now()),
+                ),
+              );
+          final refreshed = _playableStreams(
+            darbhangaResolution.applyTo(station),
+          );
+          for (final candidate in refreshed) {
+            if (!attempted.contains(candidate.url)) streams.add(candidate);
+          }
+        } catch (error, stack) {
+          DhwaniLog.player(
+            'Darbhanga refresh failed safely after source failure',
+            error,
+            stack,
+          );
+        }
+      }
     }
 
     if (!_isActive(operation, station)) return;
+    if (darbhangaResolution?.availability == DarbhangaAvailability.offAir) {
+      final failure = darbhangaOffAirFailure(
+        diagnostic: darbhangaResolution?.diagnostic,
+      );
+      _lastFailure = failure;
+      _emit(
+        DhwaniPlaybackStatus.offAir,
+        station: station,
+        failure: failure,
+        operation: operation,
+      );
+      return;
+    }
     await _finishWithFailure(
       operation,
       station,
@@ -847,6 +914,7 @@ class DhwaniAudioHandler extends BaseAudioHandler
     PlaybackFailure failure,
   ) {
     final status = switch (failure.reason) {
+      PlaybackFailureReason.offAir => DhwaniPlaybackStatus.offAir,
       PlaybackFailureReason.offline => DhwaniPlaybackStatus.offline,
       PlaybackFailureReason.geoBlocked => DhwaniPlaybackStatus.geoBlocked,
       PlaybackFailureReason.unsupported ||
@@ -1030,6 +1098,7 @@ class DhwaniAudioHandler extends BaseAudioHandler
       DhwaniPlaybackStatus.buffering => AudioProcessingState.buffering,
       DhwaniPlaybackStatus.error ||
       DhwaniPlaybackStatus.unavailable ||
+      DhwaniPlaybackStatus.offAir ||
       DhwaniPlaybackStatus.offline ||
       DhwaniPlaybackStatus.geoBlocked ||
       DhwaniPlaybackStatus.unsupported => AudioProcessingState.error,

@@ -3,27 +3,25 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 
 import '../models/radio_station.dart';
+import 'akashvani_darbhanga_resolver.dart';
 
 class AkashvaniApi {
-  AkashvaniApi({Dio? dio})
-    : _dio =
-          dio ??
-          Dio(
-            BaseOptions(
-              connectTimeout: const Duration(seconds: 6),
-              receiveTimeout: const Duration(seconds: 12),
-              headers: const {'User-Agent': 'Dhwani/1.0 (com.prashant.dhwani)'},
-            ),
-          );
+  AkashvaniApi({Dio? dio, AkashvaniDarbhangaResolver? darbhangaResolver})
+    : this._(dio ?? _defaultDio(), darbhangaResolver);
+
+  AkashvaniApi._(this._dio, AkashvaniDarbhangaResolver? resolver)
+    : _darbhangaResolver = resolver ?? AkashvaniDarbhangaResolver(dio: _dio);
 
   static const feedUrl =
       'https://raw.githubusercontent.com/codito/akashvani/master/stations.json';
-  static const officialLivePageUrl = 'https://akashvani.gov.in/radio/live.php';
+  static const officialLivePageUrl =
+      AkashvaniDarbhangaResolver.officialLivePageUrl;
   static const currentDarbhangaStreamUrl =
-      'https://radio.wavespb.com/live/8e074285599ed45d/8e074285599ed45d.m3u8';
+      AkashvaniDarbhangaResolver.currentWavesFallback;
   static const darbhangaDeliveryStreamUrl =
-      'https://d3hrxqn1tritdh.cloudfront.net/8e074285599ed45d/8e074285599ed45d.m3u8';
+      AkashvaniDarbhangaResolver.currentDeliveryFallback;
   final Dio _dio;
+  final AkashvaniDarbhangaResolver _darbhangaResolver;
 
   Future<List<RadioStation>> stations() async {
     final response = await _dio.get<Object?>(feedUrl);
@@ -37,56 +35,29 @@ class AkashvaniApi {
         .map((item) => RadioStation.fromAkashvani(item.cast<String, Object?>()))
         .where((station) => station.canPlay)
         .toList();
-    return _withOfficialDarbhangaStream(stations);
+    return _withResolvedDarbhangaStreams(stations);
   }
 
-  Future<List<RadioStation>> _withOfficialDarbhangaStream(
+  Future<List<RadioStation>> _withResolvedDarbhangaStreams(
     List<RadioStation> stations,
   ) async {
-    var officialUrl = currentDarbhangaStreamUrl;
-    try {
-      final response = await _dio.get<String>(
-        officialLivePageUrl,
-        options: Options(
-          responseType: ResponseType.plain,
-          headers: const {
-            'Accept': 'text/html,application/xhtml+xml',
-            'User-Agent':
-                'Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 Dhwani/1.4',
-          },
-        ),
-      );
-      final html = response.data ?? '';
-      final nameIndex = html.indexOf("name: 'Akashvani Darbhanga'");
-      if (nameIndex >= 0) {
-        final proposedEnd = nameIndex + 1000;
-        final end = proposedEnd < html.length ? proposedEnd : html.length;
-        final block = html.substring(nameIndex, end);
-        final streamMatch = RegExp(
-          r"^\s*live_url:\s*'([^']+)'",
-          multiLine: true,
-        ).firstMatch(block);
-        final discovered = streamMatch?.group(1)?.trim();
-        if (discovered != null && discovered.startsWith('https://')) {
-          officialUrl = discovered;
-        }
+    final result = <RadioStation>[];
+    for (final station in stations) {
+      if (!station.isDarbhanga) {
+        result.add(station);
+        continue;
       }
-    } catch (_) {}
-    return stations.map((station) {
-      if (!station.isDarbhanga) return station;
-      final streams = <String, StationStream>{
-        // The public wavespb host is reset by some ISP/content filters. Its
-        // Darbhanga stream redirects to this delivery host while broadcasting,
-        // so try the station-specific delivery URL without changing any other
-        // station's routing.
-        darbhangaDeliveryStreamUrl: const StationStream(
-          url: darbhangaDeliveryStreamUrl,
-          hls: true,
-        ),
-        officialUrl: StationStream(url: officialUrl, hls: true),
-        for (final stream in station.streams) stream.url: stream,
-      };
-      return station.copyWith(streams: streams.values.toList());
-    }).toList();
+      final resolution = await _darbhangaResolver.resolve(station: station);
+      result.add(resolution.applyTo(station));
+    }
+    return result;
   }
+
+  static Dio _defaultDio() => Dio(
+    BaseOptions(
+      connectTimeout: const Duration(seconds: 6),
+      receiveTimeout: const Duration(seconds: 12),
+      headers: const {'User-Agent': 'Dhwani/1.0 (com.prashant.dhwani)'},
+    ),
+  );
 }

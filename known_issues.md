@@ -73,3 +73,15 @@ Playback waited for notification permission, treated a transient connectivity `n
 Status: **RESOLVED**
 
 GitHub served the JSON feed as `text/plain`, so Dio returned a String and the app rejected it as a non-list. Dhwani now decodes either raw JSON text or an already-decoded list, keeps the current official WAVES URL when live-page refresh fails, and ranks it ahead of legacy fallbacks.
+
+## 2026-08-28 — Darbhanga CDN addresses can rotate or disappear off air
+
+Status: **MITIGATED; broadcaster availability remains external**
+
+Dhwani 1.4.3 no longer treats one baked WAVES or CloudFront hostname as the solution. It resolves official channel `69`, validates HLS, follows current redirects, caches the last source that actually played, invalidates it after three failures, and refreshes official metadata once within the existing station timeout. A current official 404/410 becomes an honest off-air state. DNS, TLS, reset, timeout, and regional filtering are not mislabeled as off air. The 04:33 IST Android probe received no Darbhanga media, so active-broadcast audio is not claimed.
+
+## 2026-08-28 — Failed updater lookup suppressed later release detection
+
+Status: **RESOLVED**
+
+The old PlayerScreen side effect wrote its automatic-check timestamp before GitHub completed, so a transient failure or a release published shortly afterward could suppress discovery for twelve hours. Dhwani 1.4.3 checks from the root lifecycle, records success only after a parsed release response, retries failures after ten minutes, rechecks successful results after one hour, deduplicates concurrent work, and leaves manual checks uncapped.

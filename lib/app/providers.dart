@@ -10,6 +10,7 @@ import '../core/persistence/app_database.dart';
 import '../core/recording/recording_service.dart';
 import '../core/settings/settings_controller.dart';
 import '../core/updater/app_update_service.dart';
+import '../core/updater/app_update_coordinator.dart';
 import '../data/datasources/radio_browser_api.dart';
 import '../data/models/radio_station.dart';
 import '../data/repositories/catalogue_repository.dart';
@@ -35,6 +36,18 @@ final notificationServiceProvider = Provider<NotificationService>(
 final appUpdateServiceProvider = Provider<AppUpdateService>(
   (ref) => AppUpdateService(),
 );
+final updateClockProvider = Provider<DateTime Function()>(
+  (ref) => DateTime.now,
+);
+final appUpdateCoordinatorProvider = Provider<AppUpdateCoordinator>((ref) {
+  final coordinator = AppUpdateCoordinator(
+    service: ref.read(appUpdateServiceProvider),
+    preferences: ref.read(preferencesProvider),
+    now: ref.read(updateClockProvider),
+  );
+  ref.onDispose(coordinator.dispose);
+  return coordinator;
+});
 
 /// Starts user-requested playback without gating audio on a notification
 /// permission dialog. Android media-session notifications are exempt from the
