@@ -69,10 +69,37 @@ class AkashvaniDarbhangaResolver {
   static const epgId = '333';
   static const currentWavesFallback =
       'https://radio.wavespb.com/live/8e074285599ed45d/8e074285599ed45d.m3u8';
+  // Retired 2026-10-01: the CloudFront delivery distribution that previously
+  // mirrored the Darbhanga WAVES path now returns HTTP 404 for the current
+  // stream identifier (verified with a bounded GET from two networks).
+  // The constant is retained for diagnostics/tests but is no longer emitted
+  // as a playback candidate.
   static const currentDeliveryFallback =
       'https://d3hrxqn1tritdh.cloudfront.net/8e074285599ed45d/8e074285599ed45d.m3u8';
   static const legacyBitgravityFallback =
       'https://air.pc.cdn.bitgravity.com/air/live/pbaudio160/playlist.m3u8';
+
+  /// Current official WAVES identifiers for Bihar stations whose discovery
+  /// feed (stations.json) still carries retired BitGravity `pbaudio*` URLs.
+  /// Verified against https://akashvani.gov.in/radio/live.php on 2026-10-01.
+  /// The map is keyed by official channel id (EPG id). It is a fallback for
+  /// offline/first-run use; the live page remains authoritative at runtime.
+  static const biharWavesByChannelId = <String, String>{
+    '68':
+        'https://radio.wavespb.com/live/a8c78a8fe3ebebb9/a8c78a8fe3ebebb9.m3u8',
+    '69':
+        'https://radio.wavespb.com/live/8e074285599ed45d/8e074285599ed45d.m3u8',
+    '70':
+        'https://radio.wavespb.com/live/c398958b3874b441/c398958b3874b441.m3u8',
+    '71':
+        'https://radio.wavespb.com/live/cef8ad34fec1c9d9/cef8ad34fec1c9d9.m3u8',
+    '72':
+        'https://radio.wavespb.com/live/e82b2584f0277bda/e82b2584f0277bda.m3u8',
+    '73':
+        'https://radio.wavespb.com/live/2d4feb204790b6e3/2d4feb204790b6e3.m3u8',
+    '74':
+        'https://radio.wavespb.com/live/cd626d48acead509/cd626d48acead509.m3u8',
+  };
 
   static const discoveryReuse = Duration(minutes: 15);
   static const lastKnownGoodMaxAge = Duration(days: 7);
@@ -86,7 +113,67 @@ class AkashvaniDarbhangaResolver {
   final DateTime Function() _now;
   DarbhangaResolution? _recentResolution;
   DateTime? _recentResolutionAt;
+  Map<String, String>? _recentOfficialMap;
+  DateTime? _recentOfficialMapAt;
   final Map<String, DarbhangaCandidateSource> _knownSources = {};
+
+  /// Fetches the official live page once and returns every channel's current
+  /// `live_url`. Results are reused for [discoveryReuse] so refreshing the
+  /// whole Akashvani catalogue costs one bounded HTTP GET, not one per
+  /// station. Returns an empty map when the page cannot be read; callers
+  /// must fall back to feed/seed URLs in that case.
+  Future<Map<String, String>> officialStreamMap({
+    bool forceRefresh = false,
+  }) async {
+    final now = _now();
+    if (!forceRefresh &&
+        _recentOfficialMap != null &&
+        _recentOfficialMapAt != null &&
+        now.difference(_recentOfficialMapAt!) < discoveryReuse) {
+      return _recentOfficialMap!;
+    }
+    try {
+      final response = await _dio.get<String>(
+        officialLivePageUrl,
+        options: Options(
+          responseType: ResponseType.plain,
+          headers: const {
+            'Accept': 'text/html,application/xhtml+xml',
+            'User-Agent': 'Dhwani/1.4 (Android; com.prashant.dhwani)',
+          },
+        ),
+      );
+      final parsed = parseOfficialStreamMap(response.data ?? '');
+      if (parsed.isNotEmpty) {
+        _recentOfficialMap = parsed;
+        _recentOfficialMapAt = now;
+        return parsed;
+      }
+      return _recentOfficialMap ?? const {};
+    } catch (error, stack) {
+      DhwaniLog.api(
+        'Akashvani official stream map unavailable; feed URLs retained',
+        error,
+        stack,
+      );
+      return _recentOfficialMap ?? const {};
+    }
+  }
+
+  /// Returns the official live URL for any Akashvani catalogue station, or
+  /// null when the page does not list its channel. Prefers a fresh fetch,
+  /// then the cached map, then the baked Bihar WAVES table for offline use.
+  Future<String?> officialUrlForStation(
+    RadioStation station, {
+    bool forceRefresh = false,
+  }) async {
+    final channel = channelIdForStation(station);
+    if (channel == null) return null;
+    final live = await officialStreamMap(forceRefresh: forceRefresh);
+    final url = live[channel];
+    if (url != null && url.isNotEmpty) return url;
+    return biharWavesByChannelId[channel];
+  }
 
   Future<DarbhangaResolution> resolve({
     required RadioStation station,
@@ -175,11 +262,7 @@ class AkashvaniDarbhangaResolver {
           source: DarbhangaCandidateSource.stationFeed,
         ),
       ),
-      for (final url in const [
-        currentWavesFallback,
-        currentDeliveryFallback,
-        legacyBitgravityFallback,
-      ])
+      for (final url in const [currentWavesFallback, legacyBitgravityFallback])
         DarbhangaCandidate(
           stream: StationStream(url: url, hls: true),
           source: DarbhangaCandidateSource.emergencyFallback,
@@ -242,18 +325,79 @@ class AkashvaniDarbhangaResolver {
     );
   }
 
-  static String parseOfficialStreamUrl(String html) {
-    final body = _extractChannelObject(html, channelId);
-    final name = _extractJsString(body, 'name');
-    if (name != 'Akashvani Darbhanga') {
-      throw const FormatException('Official channel 69 identity changed.');
+  static String parseOfficialStreamUrl(String html) =>
+      parseOfficialStreamUrlFor(
+        html,
+        channelId,
+        expectedName: 'Akashvani Darbhanga',
+      );
+
+  /// Parses the official `live.php` page for an arbitrary Akashvani channel.
+  ///
+  /// Commented-out `//live_url:` entries (the page keeps retired BitGravity
+  /// URLs as comments) are ignored. Only trusted HTTPS URLs are returned.
+  static String parseOfficialStreamUrlFor(
+    String html,
+    String targetChannelId, {
+    String? expectedName,
+  }) {
+    final body = _extractChannelObject(html, targetChannelId);
+    if (expectedName != null) {
+      final name = _extractJsString(body, 'name');
+      if (name != expectedName) {
+        throw FormatException(
+          'Official channel $targetChannelId identity changed.',
+        );
+      }
     }
     final liveUrl = _extractJsString(body, 'live_url').trim();
     final uri = Uri.tryParse(liveUrl);
     if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
-      throw const FormatException('Darbhanga live_url is not trusted HTTPS.');
+      throw FormatException(
+        'Channel $targetChannelId live_url is not trusted HTTPS.',
+      );
     }
     return uri.toString();
+  }
+
+  /// Best-effort parse of every `'<id>': { ... live_url: '...' }` entry on
+  /// the official page. Used to refresh all Akashvani stations in one fetch
+  /// instead of one request per station. Commented entries are skipped and
+  /// non-HTTPS entries are dropped.
+  static Map<String, String> parseOfficialStreamMap(String html) {
+    final result = <String, String>{};
+    final keyPattern = RegExp(r"""['"](\d{1,4})['"]\s*:\s*\{""");
+    for (final keyMatch in keyPattern.allMatches(html)) {
+      final id = keyMatch.group(1)!;
+      if (result.containsKey(id)) continue;
+      final open = html.indexOf('{', keyMatch.end - 1);
+      if (open < 0) continue;
+      final body = _balancedBody(html, open);
+      if (body == null) continue;
+      String liveUrl;
+      try {
+        liveUrl = _extractJsString(body, 'live_url').trim();
+      } on FormatException {
+        continue;
+      }
+      final uri = Uri.tryParse(liveUrl);
+      if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) continue;
+      result[id] = uri.toString();
+    }
+    return result;
+  }
+
+  /// Official channel id for an Akashvani catalogue station, derived from the
+  /// discovery feed's EPG id (`sourceId`) or the `air:<id>` station id.
+  static String? channelIdForStation(RadioStation station) {
+    final source = station.sourceId?.trim();
+    if (source != null && RegExp(r'^\d{1,4}$').hasMatch(source)) return source;
+    final id = station.id.trim();
+    if (id.startsWith('air:')) {
+      final suffix = id.substring(4);
+      if (RegExp(r'^\d{1,4}$').hasMatch(suffix)) return suffix;
+    }
+    return null;
   }
 
   static String _extractChannelObject(String source, String id) {
@@ -261,12 +405,20 @@ class AkashvaniDarbhangaResolver {
       "['\"]${RegExp.escape(id)}['\"]\\s*:",
     ).firstMatch(source);
     if (key == null) {
-      throw const FormatException('Official channel 69 missing.');
+      throw FormatException('Official channel $id missing.');
     }
     final open = source.indexOf('{', key.end);
     if (open < 0) {
-      throw const FormatException('Official channel 69 malformed.');
+      throw FormatException('Official channel $id malformed.');
     }
+    final body = _balancedBody(source, open);
+    if (body == null) {
+      throw FormatException('Official channel $id object is incomplete.');
+    }
+    return body;
+  }
+
+  static String? _balancedBody(String source, int open) {
     var depth = 0;
     String? quote;
     var escaped = false;
@@ -291,23 +443,54 @@ class AkashvaniDarbhangaResolver {
         if (depth == 0) return source.substring(open + 1, index);
       }
     }
-    throw const FormatException('Official channel 69 object is incomplete.');
+    return null;
   }
 
   static String _extractJsString(String objectBody, String property) {
-    final match = RegExp(
-      "(?:^|[,\\n])\\s*${RegExp.escape(property)}\\s*:\\s*(['\"])(.*?)\\1",
-      multiLine: true,
+    // The official page keeps retired BitGravity URLs as `//live_url:`
+    // comments. A match on such a commented line must be skipped, otherwise
+    // a stale 404 URL would shadow the current WAVES URL on the next line.
+    final pattern = RegExp(
+      "${RegExp.escape(property)}\\s*:\\s*(['\"])(.*?)\\1",
       dotAll: true,
-    ).firstMatch(objectBody);
-    if (match == null) {
-      throw FormatException('Official channel 69 is missing $property.');
+    );
+    for (final match in pattern.allMatches(objectBody)) {
+      final lineStart = objectBody.lastIndexOf('\n', match.start) + 1;
+      final linePrefix = objectBody.substring(lineStart, match.start);
+      final commentIndex = linePrefix.indexOf('//');
+      if (commentIndex >= 0) {
+        // `https://` inside the value is after the match, not in the prefix,
+        // so any `//` in the prefix is a JS comment marker.
+        continue;
+      }
+      // Require a plausible delimiter before the property (start, comma,
+      // newline, or brace) so `next: '...'` values cannot false-match.
+      final before = linePrefix.trimRight();
+      if (before.isNotEmpty &&
+          !before.endsWith(',') &&
+          !before.endsWith('{') &&
+          lineStart != 0) {
+        // Check the immediate preceding non-space character in the body.
+        var cursor = match.start - 1;
+        while (cursor >= 0 &&
+            (objectBody[cursor] == ' ' ||
+                objectBody[cursor] == '\t' ||
+                objectBody[cursor] == '\r' ||
+                objectBody[cursor] == '\n')) {
+          cursor--;
+        }
+        final delimiter = cursor < 0 ? '' : objectBody[cursor];
+        if (delimiter != ',' && delimiter != '{' && delimiter != '\n') {
+          continue;
+        }
+      }
+      return match
+          .group(2)!
+          .replaceAll(r'\/', '/')
+          .replaceAll(r"\'", "'")
+          .replaceAll(r'\"', '"');
     }
-    return match
-        .group(2)!
-        .replaceAll(r'\/', '/')
-        .replaceAll(r"\'", "'")
-        .replaceAll(r'\"', '"');
+    throw FormatException('Official channel is missing $property.');
   }
 
   Future<_HlsProbe> _probeHls(String initialUrl) async {

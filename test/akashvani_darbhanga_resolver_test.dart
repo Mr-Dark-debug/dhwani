@@ -346,6 +346,99 @@ void main() {
     expect(result.candidates.first.stream.url, isNot(cached));
   });
 
+  test('commented BitGravity URL does not shadow the WAVES URL', () {
+    final html = """
+      var channels = {
+        '69': {
+          name: 'Akashvani Darbhanga',
+          //live_url: 'https://air.pc.cdn.bitgravity.com/air/live/pbaudio160/playlist.m3u8',
+          live_url: 'https://radio.wavespb.com/live/8e074285599ed45d/8e074285599ed45d.m3u8'
+        }
+      };
+    """;
+
+    expect(
+      AkashvaniDarbhangaResolver.parseOfficialStreamUrl(html),
+      'https://radio.wavespb.com/live/8e074285599ed45d/8e074285599ed45d.m3u8',
+    );
+  });
+
+  test('official map refreshes Bihar channels in one fetch', () async {
+    final adapter = _ResolverAdapter({
+      AkashvaniDarbhangaResolver.officialLivePageUrl: [
+        _ok("""
+          var channels = {
+            '68': {
+              name: 'Akashvani Bhagalpur',
+              live_url: 'https://radio.wavespb.com/live/a8c78a8fe3ebebb9/a8c78a8fe3ebebb9.m3u8'
+            },
+            '69': {
+              name: 'Akashvani Darbhanga',
+              live_url: 'https://radio.wavespb.com/live/8e074285599ed45d/8e074285599ed45d.m3u8'
+            },
+            '70': {
+              name: 'Akashvani Patna',
+              live_url: 'https://radio.wavespb.com/live/c398958b3874b441/c398958b3874b441.m3u8'
+            }
+          };
+        """),
+      ],
+    });
+    final subject = resolver(adapter);
+
+    final map = await subject.officialStreamMap();
+    expect(
+      map['70'],
+      'https://radio.wavespb.com/live/c398958b3874b441/c398958b3874b441.m3u8',
+    );
+    expect(
+      await subject.officialUrlForStation(
+        const RadioStation(
+          id: 'air:70',
+          name: 'Akashvani Patna',
+          country: 'India',
+          countryCode: 'IN',
+          band: RadioBand.net,
+          streams: [
+            StationStream(
+              url:
+                  'https://air.pc.cdn.bitgravity.com/air/live/pbaudio087/playlist.m3u8',
+              hls: true,
+            ),
+          ],
+          directory: RadioDirectory.akashvani,
+          sourceId: '70',
+        ),
+      ),
+      'https://radio.wavespb.com/live/c398958b3874b441/c398958b3874b441.m3u8',
+    );
+    // Second call reuses the cached map without a new HTTP request.
+    await subject.officialStreamMap();
+    expect(
+      adapter.calls
+          .where((url) => url == AkashvaniDarbhangaResolver.officialLivePageUrl)
+          .length,
+      1,
+    );
+  });
+
+  test('channel id derives from EPG source id', () {
+    expect(AkashvaniDarbhangaResolver.channelIdForStation(_darbhanga), '69');
+    expect(
+      AkashvaniDarbhangaResolver.channelIdForStation(
+        const RadioStation(
+          id: 'other',
+          name: 'Other',
+          country: 'Germany',
+          countryCode: 'DE',
+          band: RadioBand.net,
+          streams: [],
+          directory: RadioDirectory.radioBrowser,
+        ),
+      ),
+      isNull,
+    );
+  });
   test('non-Darbhanga stations are returned byte-for-byte in order', () async {
     const other = RadioStation(
       id: 'other',

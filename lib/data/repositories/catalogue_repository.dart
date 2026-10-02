@@ -166,7 +166,6 @@ class CatalogueRepository {
       frequencyUnit: 'kHz',
       streams: [
         StationStream(url: AkashvaniApi.currentDarbhangaStreamUrl, hls: true),
-        StationStream(url: AkashvaniApi.darbhangaDeliveryStreamUrl, hls: true),
         StationStream(
           url:
               'https://airhlspush.pc.cdn.bitgravity.com/httppush/hlspbaudio160/hlspbaudio160_Auto.m3u8',
@@ -185,6 +184,26 @@ class CatalogueRepository {
       verified: true,
     ),
     RadioStation(
+      id: 'air:68',
+      name: 'Akashvani Bhagalpur',
+      country: 'India',
+      countryCode: 'IN',
+      state: 'Bihar',
+      city: 'Bhagalpur',
+      band: RadioBand.net,
+      streams: [
+        StationStream(
+          url:
+              'https://radio.wavespb.com/live/a8c78a8fe3ebebb9/a8c78a8fe3ebebb9.m3u8',
+          hls: true,
+        ),
+      ],
+      languages: ['Maithili', 'Hindi'],
+      tags: ['Akashvani', 'public radio'],
+      directory: RadioDirectory.offlineSeed,
+      sourceId: '68',
+    ),
+    RadioStation(
       id: 'air:70',
       name: 'Akashvani Patna',
       country: 'India',
@@ -195,7 +214,7 @@ class CatalogueRepository {
       streams: [
         StationStream(
           url:
-              'https://air.pc.cdn.bitgravity.com/air/live/pbaudio087/playlist.m3u8',
+              'https://radio.wavespb.com/live/c398958b3874b441/c398958b3874b441.m3u8',
           hls: true,
         ),
       ],
@@ -203,6 +222,86 @@ class CatalogueRepository {
       tags: ['Akashvani', 'public radio'],
       directory: RadioDirectory.offlineSeed,
       sourceId: '70',
+    ),
+    RadioStation(
+      id: 'air:71',
+      name: 'FM Rainbow Patna',
+      country: 'India',
+      countryCode: 'IN',
+      state: 'Bihar',
+      city: 'Patna',
+      band: RadioBand.net,
+      streams: [
+        StationStream(
+          url:
+              'https://radio.wavespb.com/live/cef8ad34fec1c9d9/cef8ad34fec1c9d9.m3u8',
+          hls: true,
+        ),
+      ],
+      languages: ['Maithili', 'Hindi'],
+      tags: ['Akashvani', 'public radio'],
+      directory: RadioDirectory.offlineSeed,
+      sourceId: '71',
+    ),
+    RadioStation(
+      id: 'air:72',
+      name: 'VBS Patna',
+      country: 'India',
+      countryCode: 'IN',
+      state: 'Bihar',
+      city: 'Patna',
+      band: RadioBand.net,
+      streams: [
+        StationStream(
+          url:
+              'https://radio.wavespb.com/live/e82b2584f0277bda/e82b2584f0277bda.m3u8',
+          hls: true,
+        ),
+      ],
+      languages: ['Maithili', 'Hindi'],
+      tags: ['Akashvani', 'public radio'],
+      directory: RadioDirectory.offlineSeed,
+      sourceId: '72',
+    ),
+    RadioStation(
+      id: 'air:73',
+      name: 'Akashvani Purnia Bihar',
+      country: 'India',
+      countryCode: 'IN',
+      state: 'Bihar',
+      city: 'Purnia',
+      band: RadioBand.net,
+      streams: [
+        StationStream(
+          url:
+              'https://radio.wavespb.com/live/2d4feb204790b6e3/2d4feb204790b6e3.m3u8',
+          hls: true,
+        ),
+      ],
+      languages: ['Maithili', 'Hindi'],
+      tags: ['Akashvani', 'public radio'],
+      directory: RadioDirectory.offlineSeed,
+      sourceId: '73',
+    ),
+    RadioStation(
+      id: 'air:74',
+      name: 'Akashvani Sasaram',
+      country: 'India',
+      countryCode: 'IN',
+      state: 'Bihar',
+      city: 'Sasaram',
+      band: RadioBand.net,
+      streams: [
+        StationStream(
+          url:
+              'https://radio.wavespb.com/live/cd626d48acead509/cd626d48acead509.m3u8',
+          hls: true,
+        ),
+      ],
+      languages: ['Maithili', 'Hindi'],
+      tags: ['Akashvani', 'public radio'],
+      directory: RadioDirectory.offlineSeed,
+      sourceId: '74',
     ),
     RadioStation(
       id: 'seed:radio-swiss-jazz',

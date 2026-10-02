@@ -74,6 +74,12 @@ Status: **RESOLVED**
 
 GitHub served the JSON feed as `text/plain`, so Dio returned a String and the app rejected it as a non-list. Dhwani now decodes either raw JSON text or an already-decoded list, keeps the current official WAVES URL when live-page refresh fails, and ranks it ahead of legacy fallbacks.
 
+## 2026-10-01 — Darbhanga/Bihar refresh shipped; filtered Wi-Fi remains external
+
+Status: **MITIGATED in app; broadcaster/network availability remains external**
+
+Darbhanga 69 keeps its HLS-validated resolver (now comment-aware), and every Akashvani station refreshes from the official live page in one bounded fetch, with current Bihar WAVES seeds for offline use. The retired CloudFront mirror (HTTP 404) is no longer tried. On the reporting network `radio.wavespb.com` is content-filtered (Meraki `blocked_categories=bs_084` over HTTP, TLS reset over HTTPS) while BitGravity push hosts return 200, so filtered Wi-Fi cannot play Darbhanga/Bihar in any app; the player fails bounded with a message suggesting mobile data. Verify audible playback on an unfiltered network.
+
 ## 2026-08-28 — Darbhanga CDN addresses can rotate or disappear off air
 
 Status: **MITIGATED; broadcaster availability remains external**

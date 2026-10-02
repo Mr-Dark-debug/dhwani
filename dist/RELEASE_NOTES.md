@@ -1,32 +1,20 @@
-# Dhwani v1.4.3 - Darbhanga & Update Detection
+# Dhwani v1.4.4 - Bihar-wide Akashvani refresh
 
-Dhwani 1.4.3 is a surgical reliability release. It changes only automatic update discovery and Akashvani Darbhanga source recovery; the existing player, recording, navigation, tuner, theme, other countries, and other stations remain intact.
+Dhwani 1.4.4 extends the v1.4.3 Darbhanga resolver to every Akashvani station. It changes only stream-source resolution and failure messaging; the existing player, recording, navigation, tuner, theme, and signing lineage remain intact.
 
-## Reliable automatic updates
+## Why this release
 
-- Checks start asynchronously after the app's first rendered frame and when Dhwani resumes.
-- A successful GitHub lookup is cached for one hour. A network/parsing failure retries after ten minutes and never writes the successful-check timestamp.
-- Manual **Check for updates** always contacts GitHub, regardless of automatic cooldowns.
-- Simultaneous checks share one request. A detected release remains visible in Settings and its update sheet appears once per release during the process session.
-- Stable `vX.Y.Z` releases compare semantic version and Android build number, and neither identity may move backward. Beta and RC tags are excluded.
-- APK SHA-256, package name, version code, signer, and trusted GitHub asset validation are unchanged.
-
-## Akashvani Darbhanga
-
-- Dhwani reads the official Akashvani page's structured channel `69` object instead of scanning an arbitrary nearby text window.
-- The official `live_url` is validated as HLS with a small bounded GET; redirects and changing delivery CDN hosts are learned dynamically.
-- Candidate order is fresh official source, last-known-good, redirect-derived delivery source, station feed, then static emergency fallbacks, with duplicates removed.
-- A successfully played source is remembered for seven days. Three consecutive failures invalidate it; any failed candidate sequence triggers at most one fresh official lookup.
-- HTTP 404/410 from the broadcaster's current official manifest is shown as **Akashvani Darbhanga is currently off air**, while DNS, TLS, timeout, network filtering, and discovery failures retain their own truthful failure paths.
-- `1296 kHz · Darbhanga, Bihar` remains RF metadata; Dhwani does not claim the phone receives AM directly.
+- The discovery feed still serves retired BitGravity `pbaudio*` URLs (HTTP 404) for Bihar stations, and only Darbhanga had an in-app resolver. Patna, Bhagalpur, Purnia, Rainbow/VBS Patna therefore had no working candidate on any network.
+- Dhwani now refreshes all Akashvani stations from the official live page in one bounded, cached fetch and prepends the official URL ahead of stale feed URLs. Darbhanga keeps its HLS-validated resolution.
+- The official-page parser ignores retired `//live_url:` comment entries, and the retired CloudFront mirror (verified HTTP 404) is no longer tried.
+- Offline/first-run seeds carry the current WAVES URLs for all seven Bihar stations.
 
 ## Verification and current live boundary
 
-- `flutter analyze`: no issues; `flutter test`: 99 passed.
-- Android ExoPlayer reached PLAYING for Radio Swiss Jazz, Deutschlandfunk, and Akashvani Live News 24x7. Next, Previous, Play/Pause, Recents, and real recording passed.
-- During the 04:33 IST Darbhanga probe, the official WAVES connection was reset on the German route and old BitGravity/CloudFront endpoints did not provide media. Dhwani stopped cleanly and did not claim LIVE. An active-broadcast audio success is therefore not claimed for this test window.
+- `flutter analyze`: no issues; `flutter test`: 103 passed.
+- Live re-verification on 2026-10-01 confirmed the official page, the 404 feed URLs, and the 404 CloudFront mirror. On the filtered test network `radio.wavespb.com` is content-filtered (Meraki block page over HTTP, TLS reset over HTTPS) while BitGravity push hosts return 200. TLS/reset failures now suggest retrying on mobile data. Audible Darbhanga playback on an unfiltered network is not claimed from this test window.
 
 ## Compatibility
 
-- Version `1.4.3+9`; Android min SDK 24; compile/target SDK 36.
+- Version `1.4.4+10`; Android min SDK 24; compile/target SDK 36.
 - Uses the existing protected signing lineage for in-place upgrades.

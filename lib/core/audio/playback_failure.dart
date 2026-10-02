@@ -130,7 +130,9 @@ PlaybackFailure classifyPlaybackFailure(Object error, {bool runtime = false}) {
     return failure(
       PlaybackFailureReason.tls,
       'Secure connection failed',
-      'Dhwani could not establish a safe connection to this station.',
+      'Dhwani could not establish a safe connection to this station. '
+          'Office or hotel Wi-Fi sometimes filters audio streams; '
+          'try mobile data if the problem persists.',
     );
   }
   if (text.contains('redirect')) {
@@ -175,7 +177,9 @@ PlaybackFailure classifyPlaybackFailure(Object error, {bool runtime = false}) {
     return failure(
       PlaybackFailureReason.runtimeDisconnect,
       'Live broadcast disconnected',
-      'The station stopped sending audio. Dhwani will retry only a few times.',
+      'The station stopped sending audio. '
+          'On filtered Wi-Fi (office/hotel), radio.wavespb.com can be blocked; '
+          'retry on mobile data. Dhwani retries only a few times.',
     );
   }
   return failure(

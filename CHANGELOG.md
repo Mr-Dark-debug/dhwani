@@ -2,6 +2,26 @@
 
 All notable Dhwani changes are recorded here. Versions follow semantic versioning; Android build numbers remain strictly increasing.
 
+## [1.4.4] - 2026-10-02
+
+### Fixed
+
+- Every Akashvani station now refreshes from the official live page in one bounded, cached fetch. The discovery feed still serves retired BitGravity `pbaudio*` URLs (HTTP 404) for Bihar, which previously left Patna, Bhagalpur, Purnia, Rainbow/VBS Patna with no working candidate; the official WAVES URL is now prepended ahead of the stale feed URL.
+- The official-page parser ignores retired `//live_url:` comment entries so a stale BitGravity URL can never shadow the current WAVES URL.
+- The retired CloudFront delivery mirror (verified HTTP 404) is no longer emitted as a Darbhanga playback candidate.
+- Offline/first-run seeds carry the current WAVES URLs for all seven Bihar stations (68 Bhagalpur, 69 Darbhanga, 70 Patna, 71 Rainbow Patna, 72 VBS Patna, 73 Purnia, 74 Sasaram).
+- TLS/handshake and connection-reset failures now suggest retrying on mobile data when office/hotel Wi-Fi filters audio streams.
+
+### Verification
+
+- Flutter analyzer passed with no issues and all 103 unit/widget tests passed, including new coverage for commented-URL parsing, one-fetch Bihar refresh with map caching, and EPG channel-id derivation.
+- Live re-verification on 2026-10-01: the official page still lists Darbhanga 69 at the known WAVES identifier; feed Bihar URLs return 404; the retired CloudFront mirror returns 404. On the filtered test network `radio.wavespb.com` is content-filtered (Meraki block page over HTTP, TLS reset over HTTPS) while BitGravity push hosts return 200, so audible Darbhanga playback must be confirmed on an unfiltered network and is not claimed here.
+
+### Compatibility
+
+- Version `1.4.4+10`, Android min SDK 24, compile/target SDK 36.
+- No dependency, navigation, recording, theme, retro tuner, general player, or signing-lineage change.
+
 ## [1.4.3] - 2026-08-28
 
 ### Fixed

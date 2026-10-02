@@ -41,16 +41,51 @@ class AkashvaniApi {
   Future<List<RadioStation>> _withResolvedDarbhangaStreams(
     List<RadioStation> stations,
   ) async {
+    // One bounded fetch of the official live page refreshes every Akashvani
+    // station at once. This matters because the discovery feed still carries
+    // retired BitGravity `pbaudio*` URLs for Bihar (68 Bhagalpur, 69
+    // Darbhanga, 70 Patna, 71 Rainbow Patna, 72 VBS Patna, 73 Purnia) that
+    // return HTTP 404, while the live page already lists current WAVES URLs.
+    // Darbhanga keeps its full HLS-validated resolver; the remaining
+    // stations get the official URL prepended without per-station probing
+    // (playback failover remains the validator).
+    Map<String, String> official = const {};
+    try {
+      official = await _darbhangaResolver.officialStreamMap();
+    } catch (_) {
+      official = const {};
+    }
     final result = <RadioStation>[];
     for (final station in stations) {
       if (!station.isDarbhanga) {
-        result.add(station);
+        result.add(_withOfficialUrl(station, official));
         continue;
       }
       final resolution = await _darbhangaResolver.resolve(station: station);
       result.add(resolution.applyTo(station));
     }
     return result;
+  }
+
+  RadioStation _withOfficialUrl(
+    RadioStation station,
+    Map<String, String> official,
+  ) {
+    final channel = AkashvaniDarbhangaResolver.channelIdForStation(station);
+    final officialUrl = channel == null
+        ? null
+        : official[channel] ??
+              AkashvaniDarbhangaResolver.biharWavesByChannelId[channel];
+    if (officialUrl == null || officialUrl.isEmpty) return station;
+    if (station.streams.any((stream) => stream.url == officialUrl)) {
+      return station;
+    }
+    return station.copyWith(
+      streams: [
+        StationStream(url: officialUrl, hls: true),
+        ...station.streams,
+      ],
+    );
   }
 
   static Dio _defaultDio() => Dio(
