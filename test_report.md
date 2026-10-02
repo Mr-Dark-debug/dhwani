@@ -2,6 +2,13 @@
 
 This file is append-only. Failed runs remain recorded with their subsequent fixes and re-test results.
 
+## 2026-10-02 — v1.4.4 Bihar-wide Akashvani refresh release
+
+- Pre-release gates on the tagged tree: `dart format --output=none --set-exit-if-changed .` clean (0 changed), `flutter analyze` no issues, `flutter test` 103 passed (the one-off recorder temp-dir lock seen earlier did not recur).
+- Commit `5cf14b8` pushed to `main`, tag `v1.4.4` pushed; workflow run `36947288182` passed in 11m5s (format, analyze, tests, signed APK/AAB, checksums, publication).
+- Release `v1.4.4` published at `https://github.com/Mr-Dark-debug/dhwani/releases/tag/v1.4.4` with `Dhwani-v1.4.4-build10-android.apk` (180,088,443 bytes), `.apk.sha256`, matching `.aab` (111,675,954 bytes), and `SHA256SUMS.txt`.
+- Live boundary unchanged from the 2026-10-01 investigation: audible Darbhanga playback on an unfiltered network remains to be confirmed by a listener outside filtered Wi-Fi; the app now resolves current WAVES URLs for all Bihar stations and fails bounded with a mobile-data hint where `radio.wavespb.com` is filtered.
+
 ## 2026-08-16 — Initial state
 
 - Project root: `D:\projects\radio`
